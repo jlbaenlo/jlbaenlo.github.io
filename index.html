@@ -152,17 +152,16 @@
             localStorage.setItem('code_verifier', codeVerifier);
 
             // Ajout de scopes standards pour éviter les soucis de permissions
-            const scope = "user-read-private user-read-email playlist-read-private playlist-modify-private playlist-modify-public";
-            const args = new URLSearchParams({
-                response_type: 'code',
-                client_id: CLIENT_ID,
-                scope: scope,
-                redirect_uri: redirectUri,
-                code_challenge_method: 'S256',
-                code_challenge: codeChallenge
-            });
-
-            window.location = 'https://accounts.spotify.com/authorize?' + args;
+            const scope = "user-read-private user-read-email user-read-playback-state playlist-read-private playlist-modify-private playlist-modify-public";
+            const authUrl = "https://accounts.spotify.com/authorize" +
+                `?client_id=${CLIENT_ID}` +
+                `&response_type=code` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&scope=${encodeURIComponent(scope)}` +
+                `&code_challenge=${codeChallenge}` +
+                `&code_challenge_method=S256` +
+                `&show_dialog=true`;
+            window.location = authUrl;
         };
 
         // ------------------------------------------------------

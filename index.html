@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="fr">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Triateur de Playlists Spotify</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 10px 0;
+        }
+
+        select {
+            padding: 5px;
+            width: 300px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Triateur de Playlists Spotify 🪩</h1>
+    <p>1. Connectez-vous<br>2. Choisissez une playlist<br>3. Cliquez pour créer une version triée</p>
+
+    <button id="loginBtn">Se connecter avec Spotify</button>
+
+    <div id="app" style="display:none;">
+
+        <h3>Vos playlists :</h3>
+        <select id="playlistSelect"></select>
+        <br><br>
+
+        <button id="sortBtn">Créer playlist triée</button>
+
+        <p id="status"></p>
+
+    </div>
+
+    <script>
+        // ------------------------------------------------------
+        // CONFIG
+        // ------------------------------------------------------
+        const clientId = "6dd5c5735bf740cf9d9c60a665204b16";  // <-- à remplacer
+        const redirectUri = window.location.href;
+
+        // Scopes nécessaires
+        const scope = [
+            "playlist-read-private",
+            "playlist-modify-private",
+            "playlist-modify-public"
+        ].join(" ");
+
+        let accessToken = null;
+
+        // ------------------------------------------------------
+        // 1. LOGIN
+        // ------------------------------------------------------
+        document.getElementById("loginBtn").onclick = () => {
+            const authUrl = "https://accounts.spotify.com/authorize" +
+                `?client_id=${clientId}` +
+                `&response_type=token` +
+                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                `&scope=${encodeURIComponent(scope)}`;
+
+            window.location = authUrl;
+        };
+
+        // ------------------------------------------------------
+        // 2. TRAITEMENT DU TOKEN APRES REDIRECTION
+        // ------------------------------------------------------
+        if (window.location.hash.includes("access_token")) {
+            accessToken = new URLSearchParams(window.location.hash.substring(1)).get("access_token");
+
+            document.getElementById("loginBtn").style.display = "none";
+            document.getElementById("app").style.display = "block";
+
+            loadPlaylists();
+        }
+
+        // ------------------------------------------------------
+        // 3. CHARGER LES PLAYLISTS
+        // ------------------------------------------------------
+        async function loadPlaylists() {
+            const resp = await fetch("https://api.spotify.com/v1/me/playlists", {
+                headers: { Authorization: "Bearer " + accessToken }
+            });
+            const data = await resp.json();
+
+            const select = document.getElementById("playlistSelect");
+            data.items.forEach(pl => {
+                const opt = document.createElement("option");
+                opt.value = pl.id;
+                opt.textContent = pl.name;
+                select.appendChild(opt);
+            });
+        }
+
+        // ------------------------------------------------------
+        // 4. TRI DES TITRES + CREATION NOUVELLE PLAYLIST
+        // ------------------------------------------------------
+        document.getElementById("sortBtn").onclick = async () => {
+            const playlistId = document.getElementById("playlistSelect").value;
+            document.getElementById("status").textContent = "Récupération de la playlist…";
+
+            // 4.1 récupérer les morceaux
+            const tracks = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            const uris = tracks.items.map(t => t.track.uri);
+
+            // 4.2 récupérer l'audio features pour trier
+            const ids = tracks.items.map(t => t.track.id).join(",");
+            const audio = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            // 4.3 trier : par danceability croissante (modifiable)
+            const sorted = audio.audio_features
+                .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
+                .sort((a, b) => a.danceability - b.danceability);
+
+            // 4.4 créer une nouvelle playlist
+            const me = await fetch("https://api.spotify.com/v1/me", {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            const newPlaylist = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+                method: "POST",
+                headers: {
+                    Authorization: "Bearer " + accessToken,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: "Playlist Triée 💿",
+                    description: "Créée automatiquement",
+                    public: false
+                })
+            }).then(r => r.json());
+
+            // 4.5 ajouter les morceaux triés
+            await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
+                method: "POST",
+                headers: {
+                    Authorization: "Bearer " + accessToken,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    uris: sorted.map(s => s.uri)
+                })
+            });
+
+            document.getElementById("status").textContent =
+                "🎉 Playlist triée créée : " + newPlaylist.name;
+        };
+    </script>
+
+</body>
+
+</html>

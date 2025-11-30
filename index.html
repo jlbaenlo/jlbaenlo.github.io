@@ -1,36 +1,60 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 
 <head>
-    <meta charset="UTF-8">
-    <title>Simple Spotify Test</title>
+    <meta charset="UTF-8" />
+    <title>Triateur de Playlists Spotify (PKCE)</title>
+    <style>
+        body {
+            font-family: Arial;
+            padding: 20px;
+        }
+
+        button {
+            padding: 10px 15px;
+            margin: 10px 0;
+        }
+
+        select {
+            padding: 5px;
+            width: 300px;
+        }
+
+        .error {
+            background: #ffcccc;
+            border: 1px solid red;
+            padding: 10px;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
 </head>
 
 <body>
-    <h1 style="color: purple;">Simple Auth Test (Version: PKCE-v2)</h1>
-    <p>This is a minimal test to check Spotify Login.</p>
+
+    <h1>Triateur de Playlists Spotify 🪩</h1>
+    <p>1. Connectez-vous<br>2. Choisissez une playlist<br>3. Cliquez pour créer une version triée</p>
 
     <!-- ERROR DISPLAY -->
-    <div id="errorDisplay"
-        style="display:none; background: #ffcccc; border: 2px solid red; padding: 20px; margin: 20px 0;">
-        <h3 style="color: red; margin-top: 0;">❌ ERROR DETECTED</h3>
-        <p><strong>Error:</strong> <span id="errorName"></span></p>
-        <p><strong>Details:</strong> <span id="errorDetails"></span></p>
+    <div id="errorDisplay" class="error">
+        <h3 style="color: red; margin-top: 0;">❌ Erreur</h3>
+        <p id="errorDetails"></p>
     </div>
 
-    <div id="step1">
-        <button id="loginBtn" style="font-size: 1.2em; padding: 10px 20px;">Login with Spotify (PKCE)</button>
-        <p><strong>Current Redirect URI:</strong> <span id="uriDisplay"></span></p>
-    </div>
+    <button id="loginBtn">Se connecter avec Spotify</button>
 
-    <div id="step2" style="display:none;">
-        <h2 style="color:green;">SUCCESS! ✅</h2>
-        <p>Access Token received:</p>
-        <textarea id="tokenDisplay" rows="5" cols="50"></textarea>
+    <div id="app" style="display:none;">
+        <h3>Vos playlists :</h3>
+        <select id="playlistSelect"></select>
+        <br><br>
+        <button id="sortBtn">Créer playlist triée</button>
+        <p id="status"></p>
     </div>
 
     <script>
+        // ------------------------------------------------------
         // CONFIGURATION
+        // ------------------------------------------------------
         const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
 
         // DYNAMIC REDIRECT URI
@@ -42,18 +66,11 @@
             redirectUri += "/";
         }
 
-        document.getElementById("uriDisplay").textContent = redirectUri;
+        let accessToken = null;
 
-        // CHECK FOR ERRORS IN URL
-        const urlParams = new URLSearchParams(window.location.search);
-        const errorParam = urlParams.get('error');
-        if (errorParam) {
-            document.getElementById("errorDisplay").style.display = "block";
-            document.getElementById("errorName").textContent = errorParam;
-            document.getElementById("errorDetails").textContent = "Check the URL for more info.";
-        }
-
+        // ------------------------------------------------------
         // PKCE HELPERS
+        // ------------------------------------------------------
         function generateRandomString(length) {
             let text = '';
             const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -72,53 +89,69 @@
                 .replace(/=+$/, '');
         }
 
-        // MAIN LOGIC
-        const args = new URLSearchParams(window.location.search);
-        const code = args.get('code');
+        // ------------------------------------------------------
+        // AUTHENTICATION LOGIC
+        // ------------------------------------------------------
 
-        if (code) {
-            // STEP 2: EXCHANGE CODE FOR TOKEN
-            document.getElementById("step1").style.display = "none";
-            const codeVerifier = localStorage.getItem('code_verifier');
-
-            fetch('https://accounts.spotify.com/api/token', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                },
-                body: new URLSearchParams({
-                    client_id: CLIENT_ID,
-                    grant_type: 'authorization_code',
-                    code: code,
-                    redirect_uri: redirectUri,
-                    code_verifier: codeVerifier,
-                }),
-            })
-                .then(response => {
-                    if (!response.ok) {
-                        return response.json().then(data => { throw new Error(JSON.stringify(data)); });
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    document.getElementById("step2").style.display = "block";
-                    document.getElementById("tokenDisplay").value = data.access_token;
-                    // Clean URL
-                    window.history.replaceState({}, document.title, "/");
-                })
-                .catch(err => {
-                    alert("Error getting token: " + err);
-                });
+        // 1. CHECK FOR ERROR
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.get('error')) {
+            document.getElementById("errorDisplay").style.display = "block";
+            document.getElementById("errorDetails").textContent = urlParams.get('error');
         }
 
-        // STEP 1: LOGIN
+        // 2. CHECK FOR CODE (AFTER LOGIN)
+        const code = urlParams.get('code');
+        if (code) {
+            exchangeCodeForToken(code);
+        }
+
+        async function exchangeCodeForToken(code) {
+            const codeVerifier = localStorage.getItem('code_verifier');
+
+            try {
+                const response = await fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({
+                        client_id: CLIENT_ID,
+                        grant_type: 'authorization_code',
+                        code: code,
+                        redirect_uri: redirectUri,
+                        code_verifier: codeVerifier,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const data = await response.json();
+                    throw new Error(JSON.stringify(data));
+                }
+
+                const data = await response.json();
+                accessToken = data.access_token;
+
+                // UI UPDATE
+                document.getElementById("loginBtn").style.display = "none";
+                document.getElementById("app").style.display = "block";
+
+                // Clean URL
+                window.history.replaceState({}, document.title, "/");
+
+                // LOAD APP DATA
+                loadPlaylists();
+
+            } catch (err) {
+                alert("Erreur lors de l'échange du token : " + err);
+            }
+        }
+
+        // 3. START LOGIN
         document.getElementById("loginBtn").onclick = async function () {
             const codeVerifier = generateRandomString(128);
             const codeChallenge = await generateCodeChallenge(codeVerifier);
-
             localStorage.setItem('code_verifier', codeVerifier);
 
-            const scope = "playlist-read-private";
+            const scope = "playlist-read-private playlist-modify-private playlist-modify-public";
             const args = new URLSearchParams({
                 response_type: 'code',
                 client_id: CLIENT_ID,
@@ -129,6 +162,81 @@
             });
 
             window.location = 'https://accounts.spotify.com/authorize?' + args;
+        };
+
+        // ------------------------------------------------------
+        // APPLICATION LOGIC (PLAYLISTS)
+        // ------------------------------------------------------
+        async function loadPlaylists() {
+            const resp = await fetch("https://api.spotify.com/v1/me/playlists", {
+                headers: { Authorization: "Bearer " + accessToken }
+            });
+            const data = await resp.json();
+
+            const select = document.getElementById("playlistSelect");
+            data.items.forEach(pl => {
+                const opt = document.createElement("option");
+                opt.value = pl.id;
+                opt.textContent = pl.name;
+                select.appendChild(opt);
+            });
+        }
+
+        document.getElementById("sortBtn").onclick = async () => {
+            const playlistId = document.getElementById("playlistSelect").value;
+            document.getElementById("status").textContent = "Récupération de la playlist…";
+
+            // 1. Récupérer les morceaux
+            const tracks = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            const uris = tracks.items.map(t => t.track.uri);
+
+            // 2. Récupérer l'audio features
+            // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
+            const ids = tracks.items.slice(0, 100).map(t => t.track.id).join(",");
+
+            const audio = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            // 3. Trier
+            const sorted = audio.audio_features
+                .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
+                .sort((a, b) => a.danceability - b.danceability);
+
+            // 4. Créer playlist
+            const me = await fetch("https://api.spotify.com/v1/me", {
+                headers: { Authorization: "Bearer " + accessToken }
+            }).then(r => r.json());
+
+            const newPlaylist = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+                method: "POST",
+                headers: {
+                    Authorization: "Bearer " + accessToken,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    name: "Playlist Triée 💿",
+                    description: "Créée automatiquement par Triateur",
+                    public: false
+                })
+            }).then(r => r.json());
+
+            // 5. Ajouter morceaux
+            await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
+                method: "POST",
+                headers: {
+                    Authorization: "Bearer " + accessToken,
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    uris: sorted.map(s => s.uri)
+                })
+            });
+
+            document.getElementById("status").textContent = "🎉 Playlist triée créée : " + newPlaylist.name;
         };
     </script>
 </body>

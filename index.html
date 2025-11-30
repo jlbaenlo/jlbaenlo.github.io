@@ -151,7 +151,8 @@
             const codeChallenge = await generateCodeChallenge(codeVerifier);
             localStorage.setItem('code_verifier', codeVerifier);
 
-            const scope = "playlist-read-private playlist-modify-private playlist-modify-public";
+            // Ajout de scopes standards pour éviter les soucis de permissions
+            const scope = "user-read-private user-read-email playlist-read-private playlist-modify-private playlist-modify-public";
             const args = new URLSearchParams({
                 response_type: 'code',
                 client_id: CLIENT_ID,
@@ -203,23 +204,55 @@
                     throw new Error("Cette playlist est vide !");
                 }
 
-                const uris = tracks.items.map(t => t.track.uri);
+                // FILTRAGE DES TRACKS VALIDES (Pas de fichiers locaux, pas de null)
+                const validTracks = tracks.items.filter(t => t.track && t.track.id);
+
+                if (validTracks.length === 0) {
+                    throw new Error("Aucun morceau valide trouvé (peut-être que des fichiers locaux ?)");
+                }
+
+                console.log(`Found ${validTracks.length} valid tracks out of ${tracks.items.length}`);
 
                 // 2. Récupérer l'audio features
                 // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
-                const ids = tracks.items.slice(0, 100).map(t => t.track.id).join(",");
+                const tracksToProcess = validTracks.slice(0, 100);
+                const ids = tracksToProcess.map(t => t.track.id).join(",");
 
                 const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
                     headers: { Authorization: "Bearer " + accessToken }
                 });
-                if (!audioResp.ok) throw new Error("Erreur audio features: " + audioResp.status);
+
+                if (!audioResp.ok) {
+                    // Debug plus précis
+                    const errBody = await audioResp.text();
+                    console.error("Audio Features Error Body:", errBody);
+                    throw new Error("Erreur audio features: " + audioResp.status);
+                }
+
                 const audio = await audioResp.json();
                 console.log("Audio features fetched:", audio);
 
                 // 3. Trier
-                const sorted = audio.audio_features
-                    .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
-                    .sort((a, b) => a.danceability - b.danceability);
+                // Attention: audio.audio_features peut contenir des nulls si un ID est invalide
+                const sorted = [];
+                for (let i = 0; i < audio.audio_features.length; i++) {
+                    const feature = audio.audio_features[i];
+                    const track = tracksToProcess[i];
+                    if (feature) {
+                        sorted.push({
+                            uri: track.track.uri,
+                            danceability: feature.danceability
+                        });
+                    } else {
+                        // Si pas de feature, on le met à la fin ou on le garde tel quel
+                        sorted.push({
+                            uri: track.track.uri,
+                            danceability: 0
+                        });
+                    }
+                }
+
+                sorted.sort((a, b) => a.danceability - b.danceability);
 
                 statusEl.textContent = "Création de la nouvelle playlist…";
 

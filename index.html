@@ -506,20 +506,34 @@
                     });
 
                     // Render Table
-                    // Columns: #, Title, Artist, Album, Label, Genre, BPM, Key, Duration, Added At
+                    // Columns: All requested columns
                     const thead = document.querySelector("#resultsContainer table thead tr");
                     thead.innerHTML = `
-                    <th>#</th>
-                    <th>Titre</th>
-                    <th>Artiste</th>
-                    <th>Album</th>
-                    <th>Label</th>
-                    <th>Genre</th>
-                    <th>BPM</th>
-                    <th>Key</th>
-                    <th>Durée</th>
-                    <th>Ajouté le</th>
-                `;
+                        <th>#</th>
+                        <th>Titre</th>
+                        <th>Artiste</th>
+                        <th>Album</th>
+                        <th>Label</th>
+                        <th>Date Sortie</th>
+                        <th>Explicit</th>
+                        <th>Genre</th>
+                        <th>Popularité</th>
+                        <th>Durée</th>
+                        <th>BPM</th>
+                        <th>Key (Camelot)</th>
+                        <th>Dance</th>
+                        <th>Energy</th>
+                        <th>Valence</th>
+                        <th>Loudness</th>
+                        <th>Mode</th>
+                        <th>Speech</th>
+                        <th>Acoustic</th>
+                        <th>Instrum</th>
+                        <th>Liveness</th>
+                        <th>Time Sig</th>
+                        <th>Ajouté le</th>
+                        <th>Ajouté par</th>
+                    `;
 
                     tbody.innerHTML = "";
                     fullData.forEach(row => {
@@ -529,17 +543,31 @@
 
                         const tr = document.createElement("tr");
                         tr.innerHTML = `
-                        <td>${row.index}</td>
-                        <td>${row.name}</td>
-                        <td>${row.artist}</td>
-                        <td>${row.album}</td>
-                        <td>${row.label}</td>
-                        <td>${row.genre}</td>
-                        <td>${row.bpm}</td>
-                        <td>${row.keyCamelot}</td>
-                        <td>${durationMin}:${durationSec}</td>
-                        <td>${addedDate}</td>
-                    `;
+                            <td>${row.index}</td>
+                            <td>${row.name}</td>
+                            <td>${row.artist}</td>
+                            <td>${row.album}</td>
+                            <td>${row.label}</td>
+                            <td>${row.releaseDate}</td>
+                            <td>${row.explicit ? "Yes" : "No"}</td>
+                            <td>${row.genre}</td>
+                            <td>${row.popularity}</td>
+                            <td>${durationMin}:${durationSec}</td>
+                            <td>${row.bpm}</td>
+                            <td>${row.keyCamelot}</td>
+                            <td>${row.danceability}</td>
+                            <td>${row.energy}</td>
+                            <td>${row.valence}</td>
+                            <td>${row.loudness}</td>
+                            <td>${row.mode}</td>
+                            <td>${row.speechiness}</td>
+                            <td>${row.acousticness}</td>
+                            <td>${row.instrumentalness}</td>
+                            <td>${row.liveness}</td>
+                            <td>${row.timeSignature}</td>
+                            <td>${addedDate}</td>
+                            <td>${row.addedBy}</td>
+                        `;
                         tbody.appendChild(tr);
                     });
 

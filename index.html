@@ -216,8 +216,8 @@
                 const tracksToProcess = validTracks.slice(0, 100);
                 const ids = tracksToProcess.map(t => t.track.id).join(",");
 
-                // 2. Récupérer les audio features (fallback per‑track)
-                let audioFeatures = [];
+                // 2. Récupérer les audio features (handle 403 – Premium required)
+                let audioFeatures = null; // null indicates fallback needed
                 try {
                     const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
                         headers: { Authorization: "Bearer " + accessToken }
@@ -225,49 +225,40 @@
                     if (audioResp.ok) {
                         const audio = await audioResp.json();
                         audioFeatures = audio.audio_features;
+                    } else if (audioResp.status === 403) {
+                        // Premium required – fallback to sorting by track name
+                        statusEl.textContent = "⚠️ Audio features require Spotify Premium – sorting by name instead.";
+                        console.warn('Audio features 403 – Premium required');
                     } else {
-                        console.warn('Batch audio‑features failed (status', audioResp.status, '), falling back to per‑track calls');
-                        // Fallback: fetch each track individually
-                        audioFeatures = [];
-                        for (const t of tracksToProcess) {
-                            const singleResp = await fetch(`https://api.spotify.com/v1/audio-features/${t.track.id}`, {
-                                headers: { Authorization: "Bearer " + accessToken }
-                            });
-                            if (singleResp.ok) {
-                                const feat = await singleResp.json();
-                                audioFeatures.push(feat);
-                            } else {
-                                console.error('Failed to fetch audio feature for', t.track.id, 'status', singleResp.status);
-                                audioFeatures.push(null);
-                            }
-                        }
+                        const errBody = await audioResp.text();
+                        console.error('Audio Features Error Body:', errBody);
+                        throw new Error('Erreur audio features: ' + audioResp.status);
                     }
                 } catch (e) {
                     console.error('Error fetching audio features:', e);
                     throw new Error('Erreur audio features: ' + e.message);
                 }
 
-                // 3. Trier
-                // Attention: audioFeatures peut contenir des nulls si un ID est invalide
-                const sorted = [];
-                for (let i = 0; i < audioFeatures.length; i++) {
-                    const feature = audioFeatures[i];
-                    const track = tracksToProcess[i];
-                    if (feature) {
-                        sorted.push({
-                            uri: track.track.uri,
-                            danceability: feature.danceability
-                        });
-                    } else {
-                        // Si pas de feature, on le met à la fin ou on le garde tel quel
-                        sorted.push({
-                            uri: track.track.uri,
-                            danceability: 0
-                        });
+                // 3. Trier (or fallback)
+                let sorted = [];
+                if (audioFeatures) {
+                    // Normal sorting by danceability
+                    for (let i = 0; i < audioFeatures.length; i++) {
+                        const feature = audioFeatures[i];
+                        const track = tracksToProcess[i];
+                        if (feature) {
+                            sorted.push({ uri: track.track.uri, danceability: feature.danceability });
+                        } else {
+                            sorted.push({ uri: track.track.uri, danceability: 0 });
+                        }
                     }
+                    sorted.sort((a, b) => a.danceability - b.danceability);
+                } else {
+                    // Fallback: sort alphabetically by track name
+                    sorted = tracksToProcess
+                        .map(t => ({ uri: t.track.uri, name: t.track.name || '' }))
+                        .sort((a, b) => a.name.localeCompare(b.name));
                 }
-
-                sorted.sort((a, b) => a.danceability - b.danceability);
 
                 statusEl.textContent = "Création de la nouvelle playlist…";
 

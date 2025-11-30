@@ -47,10 +47,6 @@
         // ------------------------------------------------------
         const clientId = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";  // <-- à remplacer
 
-        // VERIFICATION CLIENT ID
-        if (clientId === "1795fe450d3a4f6ebe2ce1cdcfbc21bf") {
-            alert("⚠️ ATTENTION : Vous n'avez pas remplacé le Client ID !\n\nAllez dans le code (index.html) et remplacez la valeur de 'clientId' par celle de votre Dashboard Spotify.");
-        }
         // On normalise l'URI pour éviter les soucis de "index.html" vs "/"
         // Cela enlève "index.html" s'il est présent, et s'assure qu'on garde le dossier racine.
         let redirectUri = window.location.origin + window.location.pathname;

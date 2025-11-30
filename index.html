@@ -184,59 +184,88 @@
 
         document.getElementById("sortBtn").onclick = async () => {
             const playlistId = document.getElementById("playlistSelect").value;
-            document.getElementById("status").textContent = "Récupération de la playlist…";
+            const statusEl = document.getElementById("status");
+            statusEl.textContent = "Récupération de la playlist…";
+            statusEl.style.color = "black";
 
-            // 1. Récupérer les morceaux
-            const tracks = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
+            try {
+                console.log("Starting sort for playlist:", playlistId);
 
-            const uris = tracks.items.map(t => t.track.uri);
+                // 1. Récupérer les morceaux
+                const tracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                    headers: { Authorization: "Bearer " + accessToken }
+                });
+                if (!tracksResp.ok) throw new Error("Erreur fetch tracks: " + tracksResp.status);
+                const tracks = await tracksResp.json();
+                console.log("Tracks fetched:", tracks);
 
-            // 2. Récupérer l'audio features
-            // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
-            const ids = tracks.items.slice(0, 100).map(t => t.track.id).join(",");
+                if (!tracks.items || tracks.items.length === 0) {
+                    throw new Error("Cette playlist est vide !");
+                }
 
-            const audio = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
+                const uris = tracks.items.map(t => t.track.uri);
 
-            // 3. Trier
-            const sorted = audio.audio_features
-                .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
-                .sort((a, b) => a.danceability - b.danceability);
+                // 2. Récupérer l'audio features
+                // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
+                const ids = tracks.items.slice(0, 100).map(t => t.track.id).join(",");
 
-            // 4. Créer playlist
-            const me = await fetch("https://api.spotify.com/v1/me", {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
+                const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                    headers: { Authorization: "Bearer " + accessToken }
+                });
+                if (!audioResp.ok) throw new Error("Erreur audio features: " + audioResp.status);
+                const audio = await audioResp.json();
+                console.log("Audio features fetched:", audio);
 
-            const newPlaylist = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
-                method: "POST",
-                headers: {
-                    Authorization: "Bearer " + accessToken,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    name: "Playlist Triée 💿",
-                    description: "Créée automatiquement par Triateur",
-                    public: false
-                })
-            }).then(r => r.json());
+                // 3. Trier
+                const sorted = audio.audio_features
+                    .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
+                    .sort((a, b) => a.danceability - b.danceability);
 
-            // 5. Ajouter morceaux
-            await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
-                method: "POST",
-                headers: {
-                    Authorization: "Bearer " + accessToken,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    uris: sorted.map(s => s.uri)
-                })
-            });
+                statusEl.textContent = "Création de la nouvelle playlist…";
 
-            document.getElementById("status").textContent = "🎉 Playlist triée créée : " + newPlaylist.name;
+                // 4. Créer playlist
+                const meResp = await fetch("https://api.spotify.com/v1/me", {
+                    headers: { Authorization: "Bearer " + accessToken }
+                });
+                if (!meResp.ok) throw new Error("Erreur fetch me: " + meResp.status);
+                const me = await meResp.json();
+
+                const newPlaylistResp = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+                    method: "POST",
+                    headers: {
+                        Authorization: "Bearer " + accessToken,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        name: "Playlist Triée 💿",
+                        description: "Créée automatiquement par Triateur",
+                        public: false
+                    })
+                });
+                if (!newPlaylistResp.ok) throw new Error("Erreur création playlist: " + newPlaylistResp.status);
+                const newPlaylist = await newPlaylistResp.json();
+
+                // 5. Ajouter morceaux
+                const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
+                    method: "POST",
+                    headers: {
+                        Authorization: "Bearer " + accessToken,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        uris: sorted.map(s => s.uri)
+                    })
+                });
+                if (!addTracksResp.ok) throw new Error("Erreur ajout tracks: " + addTracksResp.status);
+
+                statusEl.textContent = "🎉 Playlist triée créée : " + newPlaylist.name;
+                statusEl.style.color = "green";
+
+            } catch (err) {
+                console.error(err);
+                statusEl.textContent = "❌ Erreur : " + err.message;
+                statusEl.style.color = "red";
+            }
         };
     </script>
 </body>

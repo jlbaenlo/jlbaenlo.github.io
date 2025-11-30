@@ -7,11 +7,19 @@
 </head>
 
 <body>
-    <h1>Simple Auth Test</h1>
+    <h1 style="color: purple;">Simple Auth Test (Version: PKCE-v2)</h1>
     <p>This is a minimal test to check Spotify Login.</p>
 
+    <!-- ERROR DISPLAY -->
+    <div id="errorDisplay"
+        style="display:none; background: #ffcccc; border: 2px solid red; padding: 20px; margin: 20px 0;">
+        <h3 style="color: red; margin-top: 0;">❌ ERROR DETECTED</h3>
+        <p><strong>Error:</strong> <span id="errorName"></span></p>
+        <p><strong>Details:</strong> <span id="errorDetails"></span></p>
+    </div>
+
     <div id="step1">
-        <button id="loginBtn">Login with Spotify</button>
+        <button id="loginBtn" style="font-size: 1.2em; padding: 10px 20px;">Login with Spotify (PKCE)</button>
         <p><strong>Current Redirect URI:</strong> <span id="uriDisplay"></span></p>
     </div>
 
@@ -35,6 +43,15 @@
         }
 
         document.getElementById("uriDisplay").textContent = redirectUri;
+
+        // CHECK FOR ERRORS IN URL
+        const urlParams = new URLSearchParams(window.location.search);
+        const errorParam = urlParams.get('error');
+        if (errorParam) {
+            document.getElementById("errorDisplay").style.display = "block";
+            document.getElementById("errorName").textContent = errorParam;
+            document.getElementById("errorDetails").textContent = "Check the URL for more info.";
+        }
 
         // PKCE HELPERS
         function generateRandomString(length) {

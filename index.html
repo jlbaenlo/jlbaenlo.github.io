@@ -212,30 +212,46 @@
 
                 console.log(`Found ${validTracks.length} valid tracks out of ${tracks.items.length}`);
 
-                // 2. Récupérer l'audio features
                 // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
                 const tracksToProcess = validTracks.slice(0, 100);
                 const ids = tracksToProcess.map(t => t.track.id).join(",");
 
-                const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
-                    headers: { Authorization: "Bearer " + accessToken }
-                });
-
-                if (!audioResp.ok) {
-                    // Debug plus précis
-                    const errBody = await audioResp.text();
-                    console.error("Audio Features Error Body:", errBody);
-                    throw new Error("Erreur audio features: " + audioResp.status);
+                // 2. Récupérer les audio features (fallback per‑track)
+                let audioFeatures = [];
+                try {
+                    const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                        headers: { Authorization: "Bearer " + accessToken }
+                    });
+                    if (audioResp.ok) {
+                        const audio = await audioResp.json();
+                        audioFeatures = audio.audio_features;
+                    } else {
+                        console.warn('Batch audio‑features failed (status', audioResp.status, '), falling back to per‑track calls');
+                        // Fallback: fetch each track individually
+                        audioFeatures = [];
+                        for (const t of tracksToProcess) {
+                            const singleResp = await fetch(`https://api.spotify.com/v1/audio-features/${t.track.id}`, {
+                                headers: { Authorization: "Bearer " + accessToken }
+                            });
+                            if (singleResp.ok) {
+                                const feat = await singleResp.json();
+                                audioFeatures.push(feat);
+                            } else {
+                                console.error('Failed to fetch audio feature for', t.track.id, 'status', singleResp.status);
+                                audioFeatures.push(null);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('Error fetching audio features:', e);
+                    throw new Error('Erreur audio features: ' + e.message);
                 }
 
-                const audio = await audioResp.json();
-                console.log("Audio features fetched:", audio);
-
                 // 3. Trier
-                // Attention: audio.audio_features peut contenir des nulls si un ID est invalide
+                // Attention: audioFeatures peut contenir des nulls si un ID est invalide
                 const sorted = [];
-                for (let i = 0; i < audio.audio_features.length; i++) {
-                    const feature = audio.audio_features[i];
+                for (let i = 0; i < audioFeatures.length; i++) {
+                    const feature = audioFeatures[i];
                     const track = tracksToProcess[i];
                     if (feature) {
                         sorted.push({

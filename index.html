@@ -422,32 +422,65 @@
 
                         return {
                             index: index + 1,
+                            uri: t.uri,
                             name: t.name,
                             artist: t.artists.map(a => a.name).join(", "),
+                            album: t.album.name,
+                            albumArtist: t.album.artists.map(a => a.name).join(", "),
+                            discNumber: t.disc_number,
+                            trackNumber: t.track_number,
+                            durationMs: t.duration_ms,
+                            addedBy: item.added_by ? (item.added_by.id || item.added_by.uri) : "Unknown",
+                            addedAt: item.added_at,
                             genre: genres,
                             popularity: t.popularity,
                             bpm: feat ? Math.round(feat.tempo) : "N/A",
                             keyCamelot: camelot,
                             danceability: feat ? feat.danceability : "N/A",
                             energy: feat ? feat.energy : "N/A",
-                            valence: feat ? feat.valence : "N/A"
+                            valence: feat ? feat.valence : "N/A",
+                            loudness: feat ? feat.loudness : "N/A",
+                            mode: feat ? feat.mode : "N/A",
+                            speechiness: feat ? feat.speechiness : "N/A",
+                            acousticness: feat ? feat.acousticness : "N/A",
+                            instrumentalness: feat ? feat.instrumentalness : "N/A",
+                            liveness: feat ? feat.liveness : "N/A",
+                            timeSignature: feat ? feat.time_signature : "N/A"
                         };
                     });
 
                     // Render Table
+                    // Columns: #, Title, Artist, Album, Genre, BPM, Key, Duration, Added At
+                    const thead = document.querySelector("#resultsContainer table thead tr");
+                    thead.innerHTML = `
+                    <th>#</th>
+                    <th>Titre</th>
+                    <th>Artiste</th>
+                    <th>Album</th>
+                    <th>Genre</th>
+                    <th>BPM</th>
+                    <th>Key</th>
+                    <th>Durée</th>
+                    <th>Ajouté le</th>
+                `;
+
+                    tbody.innerHTML = "";
                     fullData.forEach(row => {
+                        const durationMin = Math.floor(row.durationMs / 60000);
+                        const durationSec = ((row.durationMs % 60000) / 1000).toFixed(0).padStart(2, '0');
+                        const addedDate = row.addedAt ? new Date(row.addedAt).toLocaleDateString() : "N/A";
+
                         const tr = document.createElement("tr");
                         tr.innerHTML = `
                         <td>${row.index}</td>
                         <td>${row.name}</td>
                         <td>${row.artist}</td>
+                        <td>${row.album}</td>
                         <td>${row.genre}</td>
-                        <td>${row.popularity}</td>
                         <td>${row.bpm}</td>
                         <td>${row.keyCamelot}</td>
-                        <td>${row.danceability}</td>
-                        <td>${row.energy}</td>
-                        <td>${row.valence}</td>
+                        <td>${durationMin}:${durationSec}</td>
+                        <td>${addedDate}</td>
                     `;
                         tbody.appendChild(tr);
                     });
@@ -480,18 +513,39 @@
             }
 
             function exportToCSV(data) {
-                const headers = ["#", "Titre", "Artiste", "Genre", "Popularité", "BPM", "Key (Camelot)", "Danceability", "Energy", "Valence"];
+                // Exportify Columns
+                const headers = [
+                    "Spotify URI", "Track Name", "Artist Name", "Album Name", "Disc Number",
+                    "Track Number", "Track Duration (ms)", "Added By", "Added At",
+                    "Popularity", "Danceability", "Energy", "Key", "Loudness",
+                    "Mode", "Speechiness", "Acousticness", "Instrumentalness",
+                    "Liveness", "Valence", "Tempo", "Time Signature", "Genre"
+                ];
+
                 const rows = data.map(row => [
-                    row.index,
-                    `"${row.name.replace(/"/g, '""')}"`, // Escape quotes
+                    row.uri,
+                    `"${row.name.replace(/"/g, '""')}"`,
                     `"${row.artist.replace(/"/g, '""')}"`,
-                    `"${row.genre.replace(/"/g, '""')}"`,
+                    `"${row.album.replace(/"/g, '""')}"`,
+                    row.discNumber,
+                    row.trackNumber,
+                    row.durationMs,
+                    row.addedBy,
+                    row.addedAt,
                     row.popularity,
-                    row.bpm,
-                    row.keyCamelot,
                     row.danceability,
                     row.energy,
-                    row.valence
+                    row.keyCamelot, // Using Camelot Key instead of raw integer for better usability
+                    row.loudness,
+                    row.mode,
+                    row.speechiness,
+                    row.acousticness,
+                    row.instrumentalness,
+                    row.liveness,
+                    row.valence,
+                    row.bpm,
+                    row.timeSignature,
+                    `"${row.genre.replace(/"/g, '""')}"`
                 ]);
 
                 const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -499,7 +553,7 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.setAttribute("href", url);
-                link.setAttribute("download", "playlist_analysis.csv");
+                link.setAttribute("download", "playlist_exportify.csv");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

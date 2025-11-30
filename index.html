@@ -119,17 +119,31 @@
         // 1. LOGIN
         // ------------------------------------------------------
         document.getElementById("loginBtn").onclick = () => {
-            const params = new URLSearchParams({
-                client_id: clientId.trim(),
-                response_type: "token",
-                redirect_uri: redirectUri,
-                scope: scope
-            });
-            const authUrl = "https://accounts.spotify.com/authorize?" + params.toString();
+            // HARDCODED VALUES TO RULE OUT ERRORS
+            const finalClientId = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
+            const finalRedirectUri = window.location.origin + window.location.pathname; // Dynamique
+            // On nettoie l'URI comme avant
+            let cleanRedirectUri = finalRedirectUri;
+            if (cleanRedirectUri.endsWith("index.html")) {
+                cleanRedirectUri = cleanRedirectUri.substring(0, cleanRedirectUri.length - "index.html".length);
+            }
 
-            console.log("Navigating to:", authUrl); // Debug
-            window.location = authUrl;
+            // Construction manuelle pour éviter tout problème d'encodage
+            const targetUrl = "https://accounts.spotify.com/authorize?" +
+                "client_id=" + finalClientId +
+                "&response_type=token" +
+                "&redirect_uri=" + encodeURIComponent(cleanRedirectUri) +
+                "&scope=playlist-read-private%20playlist-modify-private%20playlist-modify-public";
+
+            console.log("Navigating to:", targetUrl);
+            window.location = targetUrl;
         };
+
+        // DEBUG: Afficher l'URL actuelle
+        const currentUrlInfo = document.createElement("p");
+        currentUrlInfo.style.color = "blue";
+        currentUrlInfo.textContent = "Vous êtes actuellement sur : " + window.location.href;
+        document.body.insertBefore(currentUrlInfo, document.body.firstChild);
 
         // ------------------------------------------------------
         // 2. TRAITEMENT DU TOKEN APRES REDIRECTION

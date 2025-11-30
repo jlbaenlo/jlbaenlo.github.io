@@ -46,7 +46,15 @@
         // CONFIG
         // ------------------------------------------------------
         const clientId = "6dd5c5735bf740cf9d9c60a665204b16";  // <-- à remplacer
-        const redirectUri = window.location.href;
+        // On utilise origin + pathname pour éviter d'inclure les paramètres ? ou #
+        const redirectUri = window.location.origin + window.location.pathname;
+
+        // AFFICHER L'URI POUR DEBUG
+        const debugInfo = document.createElement("p");
+        debugInfo.style.background = "#eee";
+        debugInfo.style.padding = "10px";
+        debugInfo.innerHTML = `<strong>Redirect URI à ajouter dans le Dashboard Spotify :</strong><br><code>${redirectUri}</code>`;
+        document.body.insertBefore(debugInfo, document.getElementById("loginBtn"));
 
         // Scopes nécessaires
         const scope = [

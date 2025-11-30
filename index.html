@@ -157,8 +157,11 @@
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: body
                 })
-                    .then(response => {
-                        if (!response.ok) throw new Error('HTTP status ' + response.status);
+                    .then(async response => {
+                        if (!response.ok) {
+                            const errData = await response.json();
+                            throw new Error(`HTTP ${response.status}: ${errData.error_description || errData.error}`);
+                        }
                         return response.json();
                     })
                     .then(data => {

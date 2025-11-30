@@ -46,8 +46,19 @@
         // CONFIG
         // ------------------------------------------------------
         const clientId = "6dd5c5735bf740cf9d9c60a665204b16";  // <-- à remplacer
-        // On utilise origin + pathname pour éviter d'inclure les paramètres ? ou #
-        const redirectUri = window.location.origin + window.location.pathname;
+        // On normalise l'URI pour éviter les soucis de "index.html" vs "/"
+        // Cela enlève "index.html" s'il est présent, et s'assure qu'on garde le dossier racine.
+        let redirectUri = window.location.origin + window.location.pathname;
+        if (redirectUri.endsWith("index.html")) {
+            redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
+        }
+        // On s'assure qu'il n'y a pas de double slash à la fin (sauf si c'est juste https://...)
+        if (!redirectUri.endsWith("/")) {
+            // Si c'est un dossier, on ajoute souvent un slash, mais attention aux fichiers.
+            // Dans le doute pour GitHub Pages, le root est souvent avec un slash.
+            // On va laisser tel quel si ça ne finit pas par index.html, 
+            // mais si l'utilisateur est sur /test, ça reste /test.
+        }
 
         // AFFICHER L'URI POUR DEBUG
         const debugInfo = document.createElement("p");

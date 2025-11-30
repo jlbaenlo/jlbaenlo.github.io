@@ -23,39 +23,95 @@
 
     <script>
         // CONFIGURATION
-        const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf"; // Your ID
+        const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
 
-        // DYNAMIC REDIRECT URI (Normalizes to root if possible)
+        // DYNAMIC REDIRECT URI
         let redirectUri = window.location.origin + window.location.pathname;
         if (redirectUri.endsWith("index.html")) {
             redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
         }
-        // Ensure trailing slash if it's a folder root (common in GitHub Pages)
         if (!redirectUri.endsWith("/") && !redirectUri.endsWith(".html")) {
             redirectUri += "/";
         }
 
         document.getElementById("uriDisplay").textContent = redirectUri;
 
-        // CHECK FOR TOKEN
-        if (window.location.hash.includes("access_token")) {
-            document.getElementById("step1").style.display = "none";
-            document.getElementById("step2").style.display = "block";
-            const params = new URLSearchParams(window.location.hash.substring(1));
-            document.getElementById("tokenDisplay").value = params.get("access_token");
+        // PKCE HELPERS
+        function generateRandomString(length) {
+            let text = '';
+            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            for (let i = 0; i < length; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return text;
         }
 
-        // LOGIN LOGIC
-        document.getElementById("loginBtn").onclick = function () {
-            const scope = "playlist-read-private";
-            const url = "https://accounts.spotify.com/authorize" +
-                "?client_id=" + CLIENT_ID +
-                "&response_type=token" +
-                "&redirect_uri=" + encodeURIComponent(redirectUri) +
-                "&scope=" + encodeURIComponent(scope);
+        async function generateCodeChallenge(codeVerifier) {
+            const data = new TextEncoder().encode(codeVerifier);
+            const digest = await window.crypto.subtle.digest('SHA-256', data);
+            return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+        }
 
-            console.log("Redirecting to:", url);
-            window.location = url;
+        // MAIN LOGIC
+        const args = new URLSearchParams(window.location.search);
+        const code = args.get('code');
+
+        if (code) {
+            // STEP 2: EXCHANGE CODE FOR TOKEN
+            document.getElementById("step1").style.display = "none";
+            const codeVerifier = localStorage.getItem('code_verifier');
+
+            fetch('https://accounts.spotify.com/api/token', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: new URLSearchParams({
+                    client_id: CLIENT_ID,
+                    grant_type: 'authorization_code',
+                    code: code,
+                    redirect_uri: redirectUri,
+                    code_verifier: codeVerifier,
+                }),
+            })
+                .then(response => {
+                    if (!response.ok) {
+                        return response.json().then(data => { throw new Error(JSON.stringify(data)); });
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    document.getElementById("step2").style.display = "block";
+                    document.getElementById("tokenDisplay").value = data.access_token;
+                    // Clean URL
+                    window.history.replaceState({}, document.title, "/");
+                })
+                .catch(err => {
+                    alert("Error getting token: " + err);
+                });
+        }
+
+        // STEP 1: LOGIN
+        document.getElementById("loginBtn").onclick = async function () {
+            const codeVerifier = generateRandomString(128);
+            const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+            localStorage.setItem('code_verifier', codeVerifier);
+
+            const scope = "playlist-read-private";
+            const args = new URLSearchParams({
+                response_type: 'code',
+                client_id: CLIENT_ID,
+                scope: scope,
+                redirect_uri: redirectUri,
+                code_challenge_method: 'S256',
+                code_challenge: codeChallenge
+            });
+
+            window.location = 'https://accounts.spotify.com/authorize?' + args;
         };
     </script>
 </body>

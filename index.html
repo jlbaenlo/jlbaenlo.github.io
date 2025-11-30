@@ -1,240 +1,63 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html>
 
 <head>
-    <meta charset="UTF-8" />
-    <title>Triateur de Playlists Spotify</title>
-    <style>
-        body {
-            font-family: Arial;
-            padding: 20px;
-        }
-
-        button {
-            padding: 10px 15px;
-            margin: 10px 0;
-        }
-
-        select {
-            padding: 5px;
-            width: 300px;
-        }
-    </style>
+    <meta charset="UTF-8">
+    <title>Simple Spotify Test</title>
 </head>
 
 <body>
+    <h1>Simple Auth Test</h1>
+    <p>This is a minimal test to check Spotify Login.</p>
 
-    <h1>Triateur de Playlists Spotify 🪩</h1>
-    <p>1. Connectez-vous<br>2. Choisissez une playlist<br>3. Cliquez pour créer une version triée</p>
+    <div id="step1">
+        <button id="loginBtn">Login with Spotify</button>
+        <p><strong>Current Redirect URI:</strong> <span id="uriDisplay"></span></p>
+    </div>
 
-    <button id="loginBtn">Se connecter avec Spotify</button>
-
-    <div id="app" style="display:none;">
-
-        <h3>Vos playlists :</h3>
-        <select id="playlistSelect"></select>
-        <br><br>
-
-        <button id="sortBtn">Créer playlist triée</button>
-
-        <p id="status"></p>
-
+    <div id="step2" style="display:none;">
+        <h2 style="color:green;">SUCCESS! ✅</h2>
+        <p>Access Token received:</p>
+        <textarea id="tokenDisplay" rows="5" cols="50"></textarea>
     </div>
 
     <script>
-        // ------------------------------------------------------
-        // CONFIG
-        // ------------------------------------------------------
-        const clientId = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";  // <-- à remplacer
+        // CONFIGURATION
+        const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf"; // Your ID
 
-        // On normalise l'URI pour éviter les soucis de "index.html" vs "/"
-        // Cela enlève "index.html" s'il est présent, et s'assure qu'on garde le dossier racine.
+        // DYNAMIC REDIRECT URI (Normalizes to root if possible)
         let redirectUri = window.location.origin + window.location.pathname;
         if (redirectUri.endsWith("index.html")) {
             redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
         }
-        // On s'assure qu'il n'y a pas de double slash à la fin (sauf si c'est juste https://...)
-        if (!redirectUri.endsWith("/")) {
-            // Si c'est un dossier, on ajoute souvent un slash, mais attention aux fichiers.
-            // Dans le doute pour GitHub Pages, le root est souvent avec un slash.
-            // On va laisser tel quel si ça ne finit pas par index.html, 
-            // mais si l'utilisateur est sur /test, ça reste /test.
+        // Ensure trailing slash if it's a folder root (common in GitHub Pages)
+        if (!redirectUri.endsWith("/") && !redirectUri.endsWith(".html")) {
+            redirectUri += "/";
         }
 
-        // AFFICHER L'URI POUR DEBUG AVEC BOUTON COPIER
-        const debugContainer = document.createElement("div");
-        debugContainer.style.background = "#f0f0f0";
-        debugContainer.style.border = "1px solid #ccc";
-        debugContainer.style.padding = "15px";
-        debugContainer.style.margin = "20px 0";
-        debugContainer.style.borderRadius = "5px";
+        document.getElementById("uriDisplay").textContent = redirectUri;
 
-        const debugTitle = document.createElement("strong");
-        debugTitle.textContent = "⚠️ CONFIGURATION REQUISE :";
-        debugContainer.appendChild(debugTitle);
-
-        const debugText = document.createElement("p");
-        debugText.innerHTML = `Ajoutez cette URI exacte dans votre Dashboard Spotify (<a href='https://developer.spotify.com/dashboard' target='_blank'>lien</a>) :`;
-        debugContainer.appendChild(debugText);
-
-        const codeBlock = document.createElement("code");
-        codeBlock.style.display = "block";
-        codeBlock.style.background = "#fff";
-        codeBlock.style.padding = "10px";
-        codeBlock.style.border = "1px solid #ddd";
-        codeBlock.style.margin = "10px 0";
-        codeBlock.style.wordBreak = "break-all";
-        codeBlock.textContent = redirectUri;
-        debugContainer.appendChild(codeBlock);
-
-        const copyBtn = document.createElement("button");
-        copyBtn.textContent = "Copier l'URI";
-        copyBtn.onclick = () => {
-            navigator.clipboard.writeText(redirectUri).then(() => {
-                copyBtn.textContent = "Copié ! ✅";
-                setTimeout(() => copyBtn.textContent = "Copier l'URI", 2000);
-            });
-        };
-        debugContainer.appendChild(copyBtn);
-
-        const details = document.createElement("small");
-        details.style.display = "block";
-        details.style.marginTop = "10px";
-        details.style.color = "#666";
-        details.textContent = `(Longueur: ${redirectUri.length} caractères. Assurez-vous qu'il n'y a pas d'espace en trop dans le Dashboard)`;
-        debugContainer.appendChild(details);
-
-        document.body.insertBefore(debugContainer, document.getElementById("loginBtn"));
-
-        // Scopes nécessaires
-        const scope = [
-            "playlist-read-private",
-            "playlist-modify-private",
-            "playlist-modify-public"
-        ].join(" ");
-
-        let accessToken = null;
-
-        // ------------------------------------------------------
-        // 1. LOGIN
-        // ------------------------------------------------------
-        document.getElementById("loginBtn").onclick = () => {
-            // HARDCODED VALUES TO RULE OUT ERRORS
-            const finalClientId = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
-            const finalRedirectUri = window.location.origin + window.location.pathname; // Dynamique
-            // On nettoie l'URI comme avant
-            let cleanRedirectUri = finalRedirectUri;
-            if (cleanRedirectUri.endsWith("index.html")) {
-                cleanRedirectUri = cleanRedirectUri.substring(0, cleanRedirectUri.length - "index.html".length);
-            }
-
-            // Construction manuelle pour éviter tout problème d'encodage
-            const targetUrl = "https://accounts.spotify.com/authorize?" +
-                "client_id=" + finalClientId +
-                "&response_type=token" +
-                "&redirect_uri=" + encodeURIComponent(cleanRedirectUri) +
-                "&scope=playlist-read-private%20playlist-modify-private%20playlist-modify-public";
-
-            console.log("Navigating to:", targetUrl);
-            window.location = targetUrl;
-        };
-
-        // DEBUG: Afficher l'URL actuelle
-        const currentUrlInfo = document.createElement("p");
-        currentUrlInfo.style.color = "blue";
-        currentUrlInfo.textContent = "Vous êtes actuellement sur : " + window.location.href;
-        document.body.insertBefore(currentUrlInfo, document.body.firstChild);
-
-        // ------------------------------------------------------
-        // 2. TRAITEMENT DU TOKEN APRES REDIRECTION
-        // ------------------------------------------------------
+        // CHECK FOR TOKEN
         if (window.location.hash.includes("access_token")) {
-            accessToken = new URLSearchParams(window.location.hash.substring(1)).get("access_token");
-
-            document.getElementById("loginBtn").style.display = "none";
-            document.getElementById("app").style.display = "block";
-
-            loadPlaylists();
+            document.getElementById("step1").style.display = "none";
+            document.getElementById("step2").style.display = "block";
+            const params = new URLSearchParams(window.location.hash.substring(1));
+            document.getElementById("tokenDisplay").value = params.get("access_token");
         }
 
-        // ------------------------------------------------------
-        // 3. CHARGER LES PLAYLISTS
-        // ------------------------------------------------------
-        async function loadPlaylists() {
-            const resp = await fetch("https://api.spotify.com/v1/me/playlists", {
-                headers: { Authorization: "Bearer " + accessToken }
-            });
-            const data = await resp.json();
+        // LOGIN LOGIC
+        document.getElementById("loginBtn").onclick = function () {
+            const scope = "playlist-read-private";
+            const url = "https://accounts.spotify.com/authorize" +
+                "?client_id=" + CLIENT_ID +
+                "&response_type=token" +
+                "&redirect_uri=" + encodeURIComponent(redirectUri) +
+                "&scope=" + encodeURIComponent(scope);
 
-            const select = document.getElementById("playlistSelect");
-            data.items.forEach(pl => {
-                const opt = document.createElement("option");
-                opt.value = pl.id;
-                opt.textContent = pl.name;
-                select.appendChild(opt);
-            });
-        }
-
-        // ------------------------------------------------------
-        // 4. TRI DES TITRES + CREATION NOUVELLE PLAYLIST
-        // ------------------------------------------------------
-        document.getElementById("sortBtn").onclick = async () => {
-            const playlistId = document.getElementById("playlistSelect").value;
-            document.getElementById("status").textContent = "Récupération de la playlist…";
-
-            // 4.1 récupérer les morceaux
-            const tracks = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
-
-            const uris = tracks.items.map(t => t.track.uri);
-
-            // 4.2 récupérer l'audio features pour trier
-            const ids = tracks.items.map(t => t.track.id).join(",");
-            const audio = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
-
-            // 4.3 trier : par danceability croissante (modifiable)
-            const sorted = audio.audio_features
-                .map((f, i) => ({ uri: uris[i], danceability: f?.danceability || 0 }))
-                .sort((a, b) => a.danceability - b.danceability);
-
-            // 4.4 créer une nouvelle playlist
-            const me = await fetch("https://api.spotify.com/v1/me", {
-                headers: { Authorization: "Bearer " + accessToken }
-            }).then(r => r.json());
-
-            const newPlaylist = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
-                method: "POST",
-                headers: {
-                    Authorization: "Bearer " + accessToken,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    name: "Playlist Triée 💿",
-                    description: "Créée automatiquement",
-                    public: false
-                })
-            }).then(r => r.json());
-
-            // 4.5 ajouter les morceaux triés
-            await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
-                method: "POST",
-                headers: {
-                    Authorization: "Bearer " + accessToken,
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({
-                    uris: sorted.map(s => s.uri)
-                })
-            });
-
-            document.getElementById("status").textContent =
-                "🎉 Playlist triée créée : " + newPlaylist.name;
+            console.log("Redirecting to:", url);
+            window.location = url;
         };
     </script>
-
 </body>
 
 </html>

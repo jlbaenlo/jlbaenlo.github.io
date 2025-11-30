@@ -435,10 +435,32 @@
                         console.error("Error fetching audio features", e);
                     }
 
-                    // 4. Build Data & Render
+                    // 4. Fetch Albums (for Record Label & Release Date)
+                    statusEl.textContent = "Analyse en cours… (Récupération des albums)";
+                    const albumIds = [...new Set(itemsToProcess.map(t => t.track.album.id))];
+                    const albumChunks = [];
+                    for (let i = 0; i < albumIds.length; i += 20) {
+                        albumChunks.push(albumIds.slice(i, i + 20));
+                    }
+
+                    const albumMap = {}; // id -> { label, release_date }
+                    for (const chunk of albumChunks) {
+                        const albumsResp = await fetch(`https://api.spotify.com/v1/albums?ids=${chunk.join(",")}`, {
+                            headers: { Authorization: "Bearer " + accessToken }
+                        });
+                        if (albumsResp.ok) {
+                            const albumsData = await albumsResp.json();
+                            albumsData.albums.forEach(a => {
+                                albumMap[a.id] = a;
+                            });
+                        }
+                    }
+
+                    // 5. Build Data & Render
                     const fullData = itemsToProcess.map((item, index) => {
                         const t = item.track;
                         const feat = audioFeaturesMap[t.id] || null;
+                        const albumDetails = albumMap[t.album.id] || {};
 
                         // Resolve Genres (take from first artist)
                         const mainArtistId = t.artists[0]?.id;
@@ -457,9 +479,12 @@
                             artist: t.artists.map(a => a.name).join(", "),
                             album: t.album.name,
                             albumArtist: t.album.artists.map(a => a.name).join(", "),
+                            releaseDate: albumDetails.release_date || t.album.release_date,
+                            label: albumDetails.label || "Unknown",
                             discNumber: t.disc_number,
                             trackNumber: t.track_number,
                             durationMs: t.duration_ms,
+                            explicit: t.explicit,
                             addedBy: item.added_by ? (item.added_by.id || item.added_by.uri) : "Unknown",
                             addedAt: item.added_at,
                             genre: genres,
@@ -468,25 +493,27 @@
                             keyCamelot: camelot,
                             danceability: feat ? feat.danceability : "N/A",
                             energy: feat ? feat.energy : "N/A",
-                            valence: feat ? feat.valence : "N/A",
+                            key: feat ? feat.key : "N/A",
                             loudness: feat ? feat.loudness : "N/A",
                             mode: feat ? feat.mode : "N/A",
                             speechiness: feat ? feat.speechiness : "N/A",
                             acousticness: feat ? feat.acousticness : "N/A",
                             instrumentalness: feat ? feat.instrumentalness : "N/A",
                             liveness: feat ? feat.liveness : "N/A",
+                            valence: feat ? feat.valence : "N/A",
                             timeSignature: feat ? feat.time_signature : "N/A"
                         };
                     });
 
                     // Render Table
-                    // Columns: #, Title, Artist, Album, Genre, BPM, Key, Duration, Added At
+                    // Columns: #, Title, Artist, Album, Label, Genre, BPM, Key, Duration, Added At
                     const thead = document.querySelector("#resultsContainer table thead tr");
                     thead.innerHTML = `
                     <th>#</th>
                     <th>Titre</th>
                     <th>Artiste</th>
                     <th>Album</th>
+                    <th>Label</th>
                     <th>Genre</th>
                     <th>BPM</th>
                     <th>Key</th>
@@ -506,6 +533,7 @@
                         <td>${row.name}</td>
                         <td>${row.artist}</td>
                         <td>${row.album}</td>
+                        <td>${row.label}</td>
                         <td>${row.genre}</td>
                         <td>${row.bpm}</td>
                         <td>${row.keyCamelot}</td>
@@ -543,13 +571,13 @@
             }
 
             function exportToCSV(data) {
-                // Exportify Columns
+                // User Requested Columns
                 const headers = [
-                    "Spotify URI", "Track Name", "Artist Name", "Album Name", "Disc Number",
-                    "Track Number", "Track Duration (ms)", "Added By", "Added At",
-                    "Popularity", "Danceability", "Energy", "Key", "Loudness",
-                    "Mode", "Speechiness", "Acousticness", "Instrumentalness",
-                    "Liveness", "Valence", "Tempo", "Time Signature", "Genre"
+                    "Spotify URI", "Track Name", "Artist Name", "Album Name", "Release Date", "Record Label",
+                    "Disc Number", "Track Number", "Duration (ms)", "Explicit", "Added By", "Added At",
+                    "Genres", "Popularity", "BPM", "Key (Camelot)", "Key (Raw)", "Loudness",
+                    "Mode", "Danceability", "Energy", "Valence", "Speechiness", "Acousticness",
+                    "Instrumentalness", "Liveness", "Time Signature"
                 ];
 
                 const rows = data.map(row => [
@@ -557,25 +585,29 @@
                     `"${row.name.replace(/"/g, '""')}"`,
                     `"${row.artist.replace(/"/g, '""')}"`,
                     `"${row.album.replace(/"/g, '""')}"`,
+                    row.releaseDate,
+                    `"${row.label.replace(/"/g, '""')}"`,
                     row.discNumber,
                     row.trackNumber,
                     row.durationMs,
+                    row.explicit,
                     row.addedBy,
                     row.addedAt,
+                    `"${row.genre.replace(/"/g, '""')}"`,
                     row.popularity,
-                    row.danceability,
-                    row.energy,
-                    row.keyCamelot, // Using Camelot Key instead of raw integer for better usability
+                    row.bpm,
+                    row.keyCamelot,
+                    row.key, // Raw Key
                     row.loudness,
                     row.mode,
+                    row.danceability,
+                    row.energy,
+                    row.valence,
                     row.speechiness,
                     row.acousticness,
                     row.instrumentalness,
                     row.liveness,
-                    row.valence,
-                    row.bpm,
-                    row.timeSignature,
-                    `"${row.genre.replace(/"/g, '""')}"`
+                    row.timeSignature
                 ]);
 
                 const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
@@ -583,7 +615,7 @@
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.setAttribute("href", url);
-                link.setAttribute("download", "playlist_exportify.csv");
+                link.setAttribute("download", "playlist_analysis.csv");
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

@@ -41,10 +41,22 @@
         <p id="errorDetails"></p>
     </div>
 
-    <button id="loginBtn">Se connecter avec Spotify</button>
+    <div id="login-section">
+        <button id="loginBtn"
+            style="background-color: #1DB954; color: white; font-size: 16px; padding: 15px 30px; border: none; border-radius: 25px; cursor: pointer;">
+            Se connecter avec Spotify (PKCE)
+        </button>
+    </div>
 
-    <div id="app" style="display:none;">
-        <h3>Vos playlists :</h3>
+    <div id="app-section" style="display:none;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2 id="welcomeMsg">Bienvenue</h2>
+            <button id="logoutBtn"
+                style="background-color: #f44336; color: white; padding: 8px 15px; border: none; border-radius: 5px; cursor: pointer;">Déconnexion</button>
+        </div>
+        <p id="userStatus" style="font-style: italic; color: #666;"></p>
+
+        <label for="playlistSelect">Choisir une playlist :</label>
         <select id="playlistSelect"></select>
         <br><br>
         <button id="sortBtn">Créer playlist triée</button>
@@ -116,59 +128,77 @@
             }
 
             // ------------------------------------------------------
-            // AUTHENTICATION LOGIC
+            // MAIN EXECUTION
             // ------------------------------------------------------
+            const args = new URLSearchParams(window.location.search);
+            const code = args.get('code');
+            const error = args.get('error');
 
-            // 1. CHECK FOR ERROR
-            const urlParams = new URLSearchParams(window.location.search);
-            if (urlParams.get('error')) {
+            // Handle Logout
+            document.getElementById("logoutBtn").onclick = () => {
+                localStorage.removeItem('code_verifier');
+                window.location.href = window.location.origin + window.location.pathname;
+            };
+
+            if (error) {
                 document.getElementById("errorDisplay").style.display = "block";
-                document.getElementById("errorDetails").textContent = urlParams.get('error');
+                document.getElementById("errorDetails").textContent = "Erreur Spotify : " + error;
             }
 
-            // 2. CHECK FOR CODE (AFTER LOGIN)
-            const code = urlParams.get('code');
             if (code) {
-                exchangeCodeForToken(code);
-            }
-
-            async function exchangeCodeForToken(code) {
                 const codeVerifier = localStorage.getItem('code_verifier');
+                const body = new URLSearchParams({
+                    grant_type: 'authorization_code',
+                    code: code,
+                    redirect_uri: redirectUri,
+                    client_id: CLIENT_ID,
+                    code_verifier: codeVerifier
+                });
 
-                try {
-                    const response = await fetch('https://accounts.spotify.com/api/token', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: new URLSearchParams({
-                            client_id: CLIENT_ID,
-                            grant_type: 'authorization_code',
-                            code: code,
-                            redirect_uri: redirectUri,
-                            code_verifier: codeVerifier,
-                        }),
+                fetch('https://accounts.spotify.com/api/token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body
+                })
+                    .then(response => {
+                        if (!response.ok) throw new Error('HTTP status ' + response.status);
+                        return response.json();
+                    })
+                    .then(data => {
+                        accessToken = data.access_token;
+                        document.getElementById("login-section").style.display = "none";
+                        document.getElementById("app-section").style.display = "block";
+
+                        // Fetch User Profile to check Premium status
+                        return fetch("https://api.spotify.com/v1/me", {
+                            headers: { Authorization: "Bearer " + accessToken }
+                        });
+                    })
+                    .then(r => r.json())
+                    .then(me => {
+                        console.log("User Profile:", me);
+                        document.getElementById("welcomeMsg").textContent = "Bienvenue, " + (me.display_name || me.id);
+
+                        const statusText = `Compte : ${me.product} | ID : ${me.id}`;
+                        const statusEl = document.getElementById("userStatus");
+                        statusEl.textContent = statusText;
+
+                        if (me.product !== 'premium') {
+                            statusEl.style.color = "orange";
+                            statusEl.textContent += " (⚠️ Audio Features limités)";
+                        } else {
+                            statusEl.style.color = "green";
+                        }
+
+                        loadPlaylists();
+                        // Clean URL
+                        window.history.replaceState({}, document.title, "/");
+                    })
+                    .catch(err => {
+                        console.error('Error:', err);
+                        document.getElementById("errorDisplay").style.display = "block";
+                        document.getElementById("errorDetails").textContent = "Erreur d'authentification : " + err.message;
                     });
-
-                    if (!response.ok) {
-                        const data = await response.json();
-                        throw new Error(JSON.stringify(data));
-                    }
-
-                    const data = await response.json();
-                    accessToken = data.access_token;
-
-                    // UI UPDATE
-                    document.getElementById("loginBtn").style.display = "none";
-                    document.getElementById("app").style.display = "block";
-
-                    // Clean URL
-                    window.history.replaceState({}, document.title, "/");
-
-                    // LOAD APP DATA
-                    loadPlaylists();
-
-                } catch (err) {
-                    alert("Erreur lors de l'échange du token : " + err);
-                }
             }
 
             // 3. START LOGIN

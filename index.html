@@ -48,265 +48,463 @@
         <select id="playlistSelect"></select>
         <br><br>
         <button id="sortBtn">Créer playlist triée</button>
-        <p id="status"></p>
-    </div>
+        <button id="analyzeBtn" style="background-color: #2196F3; color: white;">Analyser la playlist</button>
 
-    <script>
-        // ------------------------------------------------------
-        // CONFIGURATION
-        // ------------------------------------------------------
-        const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
+        <div id="status"></div>
+        <div id="error-container"></div>
 
-        // DYNAMIC REDIRECT URI
-        let redirectUri = window.location.origin + window.location.pathname;
-        if (redirectUri.endsWith("index.html")) {
-            redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
-        }
-        if (!redirectUri.endsWith("/") && !redirectUri.endsWith(".html")) {
-            redirectUri += "/";
-        }
+        <div id="resultsContainer" style="display:none; margin-top: 20px;">
+            <button id="exportBtn" style="background-color: #4CAF50; color: white; margin-bottom: 10px;">📥 Télécharger
+                Excel (CSV)</button>
+            <div style="overflow-x: auto;">
+                <table border="1" style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                    <thead>
+                        <tr style="background-color: #f2f2f2;">
+                            <th>#</th>
+                            <th>Titre</th>
+                            <th>Artiste</th>
+                            <th>Genre</th>
+                            <th>Popularité</th>
+                            <th>BPM</th>
+                            <th>Key (Camelot)</th>
+                            <th>Danceability</th>
+                            <th>Energy</th>
+                            <th>Valence</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tracksTableBody"></tbody>
+                </table>
+            </div>
+        </div>
 
-        let accessToken = null;
+        <script>
+            // ------------------------------------------------------
+            // CONFIGURATION
+            // ------------------------------------------------------
+            const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
 
-        // ------------------------------------------------------
-        // PKCE HELPERS
-        // ------------------------------------------------------
-        function generateRandomString(length) {
-            let text = '';
-            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-            for (let i = 0; i < length; i++) {
-                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            // DYNAMIC REDIRECT URI
+            let redirectUri = window.location.origin + window.location.pathname;
+            if (redirectUri.endsWith("index.html")) {
+                redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
             }
-            return text;
-        }
+            if (!redirectUri.endsWith("/") && !redirectUri.endsWith(".html")) {
+                redirectUri += "/";
+            }
 
-        async function generateCodeChallenge(codeVerifier) {
-            const data = new TextEncoder().encode(codeVerifier);
-            const digest = await window.crypto.subtle.digest('SHA-256', data);
-            return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
-                .replace(/\+/g, '-')
-                .replace(/\//g, '_')
-                .replace(/=+$/, '');
-        }
+            let accessToken = null;
 
-        // ------------------------------------------------------
-        // AUTHENTICATION LOGIC
-        // ------------------------------------------------------
-
-        // 1. CHECK FOR ERROR
-        const urlParams = new URLSearchParams(window.location.search);
-        if (urlParams.get('error')) {
-            document.getElementById("errorDisplay").style.display = "block";
-            document.getElementById("errorDetails").textContent = urlParams.get('error');
-        }
-
-        // 2. CHECK FOR CODE (AFTER LOGIN)
-        const code = urlParams.get('code');
-        if (code) {
-            exchangeCodeForToken(code);
-        }
-
-        async function exchangeCodeForToken(code) {
-            const codeVerifier = localStorage.getItem('code_verifier');
-
-            try {
-                const response = await fetch('https://accounts.spotify.com/api/token', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        client_id: CLIENT_ID,
-                        grant_type: 'authorization_code',
-                        code: code,
-                        redirect_uri: redirectUri,
-                        code_verifier: codeVerifier,
-                    }),
-                });
-
-                if (!response.ok) {
-                    const data = await response.json();
-                    throw new Error(JSON.stringify(data));
+            // ------------------------------------------------------
+            // PKCE HELPERS
+            // ------------------------------------------------------
+            function generateRandomString(length) {
+                let text = '';
+                const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+                for (let i = 0; i < length; i++) {
+                    text += possible.charAt(Math.floor(Math.random() * possible.length));
                 }
-
-                const data = await response.json();
-                accessToken = data.access_token;
-
-                // UI UPDATE
-                document.getElementById("loginBtn").style.display = "none";
-                document.getElementById("app").style.display = "block";
-
-                // Clean URL
-                window.history.replaceState({}, document.title, "/");
-
-                // LOAD APP DATA
-                loadPlaylists();
-
-            } catch (err) {
-                alert("Erreur lors de l'échange du token : " + err);
+                return text;
             }
-        }
 
-        // 3. START LOGIN
-        document.getElementById("loginBtn").onclick = async function () {
-            const codeVerifier = generateRandomString(128);
-            const codeChallenge = await generateCodeChallenge(codeVerifier);
-            localStorage.setItem('code_verifier', codeVerifier);
+            async function generateCodeChallenge(codeVerifier) {
+                const data = new TextEncoder().encode(codeVerifier);
+                const digest = await window.crypto.subtle.digest('SHA-256', data);
+                return btoa(String.fromCharCode.apply(null, [...new Uint8Array(digest)]))
+                    .replace(/\+/g, '-')
+                    .replace(/\//g, '_')
+                    .replace(/=+$/, '');
+            }
 
-            // Ajout de scopes standards pour éviter les soucis de permissions
-            const scope = "user-read-private user-read-email user-read-playback-state playlist-read-private playlist-modify-private playlist-modify-public";
-            const authUrl = "https://accounts.spotify.com/authorize" +
-                `?client_id=${CLIENT_ID}` +
-                `&response_type=code` +
-                `&redirect_uri=${encodeURIComponent(redirectUri)}` +
-                `&scope=${encodeURIComponent(scope)}` +
-                `&code_challenge=${codeChallenge}` +
-                `&code_challenge_method=S256` +
-                `&show_dialog=true`;
-            window.location = authUrl;
-        };
+            // ------------------------------------------------------
+            // AUTHENTICATION LOGIC
+            // ------------------------------------------------------
 
-        // ------------------------------------------------------
-        // APPLICATION LOGIC (PLAYLISTS)
-        // ------------------------------------------------------
-        async function loadPlaylists() {
-            const resp = await fetch("https://api.spotify.com/v1/me/playlists", {
-                headers: { Authorization: "Bearer " + accessToken }
-            });
-            const data = await resp.json();
+            // 1. CHECK FOR ERROR
+            const urlParams = new URLSearchParams(window.location.search);
+            if (urlParams.get('error')) {
+                document.getElementById("errorDisplay").style.display = "block";
+                document.getElementById("errorDetails").textContent = urlParams.get('error');
+            }
 
-            const select = document.getElementById("playlistSelect");
-            data.items.forEach(pl => {
-                const opt = document.createElement("option");
-                opt.value = pl.id;
-                opt.textContent = pl.name;
-                select.appendChild(opt);
-            });
-        }
+            // 2. CHECK FOR CODE (AFTER LOGIN)
+            const code = urlParams.get('code');
+            if (code) {
+                exchangeCodeForToken(code);
+            }
 
-        document.getElementById("sortBtn").onclick = async () => {
-            const playlistId = document.getElementById("playlistSelect").value;
-            const statusEl = document.getElementById("status");
-            statusEl.textContent = "Récupération de la playlist…";
-            statusEl.style.color = "black";
+            async function exchangeCodeForToken(code) {
+                const codeVerifier = localStorage.getItem('code_verifier');
 
-            try {
-                console.log("Starting sort for playlist:", playlistId);
+                try {
+                    const response = await fetch('https://accounts.spotify.com/api/token', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({
+                            client_id: CLIENT_ID,
+                            grant_type: 'authorization_code',
+                            code: code,
+                            redirect_uri: redirectUri,
+                            code_verifier: codeVerifier,
+                        }),
+                    });
 
-                // 1. Récupérer les morceaux
-                const tracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                    if (!response.ok) {
+                        const data = await response.json();
+                        throw new Error(JSON.stringify(data));
+                    }
+
+                    const data = await response.json();
+                    accessToken = data.access_token;
+
+                    // UI UPDATE
+                    document.getElementById("loginBtn").style.display = "none";
+                    document.getElementById("app").style.display = "block";
+
+                    // Clean URL
+                    window.history.replaceState({}, document.title, "/");
+
+                    // LOAD APP DATA
+                    loadPlaylists();
+
+                } catch (err) {
+                    alert("Erreur lors de l'échange du token : " + err);
+                }
+            }
+
+            // 3. START LOGIN
+            document.getElementById("loginBtn").onclick = async function () {
+                const codeVerifier = generateRandomString(128);
+                const codeChallenge = await generateCodeChallenge(codeVerifier);
+                localStorage.setItem('code_verifier', codeVerifier);
+
+                // Ajout de scopes standards pour éviter les soucis de permissions
+                const scope = "user-read-private user-read-email user-read-playback-state playlist-read-private playlist-modify-private playlist-modify-public";
+                const authUrl = "https://accounts.spotify.com/authorize" +
+                    `?client_id=${CLIENT_ID}` +
+                    `&response_type=code` +
+                    `&redirect_uri=${encodeURIComponent(redirectUri)}` +
+                    `&scope=${encodeURIComponent(scope)}` +
+                    `&code_challenge=${codeChallenge}` +
+                    `&code_challenge_method=S256` +
+                    `&show_dialog=true`;
+                window.location = authUrl;
+            };
+
+            // ------------------------------------------------------
+            // APPLICATION LOGIC (PLAYLISTS)
+            // ------------------------------------------------------
+            async function loadPlaylists() {
+                const resp = await fetch("https://api.spotify.com/v1/me/playlists", {
                     headers: { Authorization: "Bearer " + accessToken }
                 });
-                if (!tracksResp.ok) throw new Error("Erreur fetch tracks: " + tracksResp.status);
-                const tracks = await tracksResp.json();
-                console.log("Tracks fetched:", tracks);
+                const data = await resp.json();
 
-                if (!tracks.items || tracks.items.length === 0) {
-                    throw new Error("Cette playlist est vide !");
-                }
+                const select = document.getElementById("playlistSelect");
+                data.items.forEach(pl => {
+                    const opt = document.createElement("option");
+                    opt.value = pl.id;
+                    opt.textContent = pl.name;
+                    select.appendChild(opt);
+                });
+            }
 
-                // FILTRAGE DES TRACKS VALIDES (Pas de fichiers locaux, pas de null)
-                const validTracks = tracks.items.filter(t => t.track && t.track.id);
+            document.getElementById("sortBtn").onclick = async () => {
+                const playlistId = document.getElementById("playlistSelect").value;
+                const statusEl = document.getElementById("status");
+                statusEl.textContent = "Récupération de la playlist…";
+                statusEl.style.color = "black";
 
-                if (validTracks.length === 0) {
-                    throw new Error("Aucun morceau valide trouvé (peut-être que des fichiers locaux ?)");
-                }
-
-                console.log(`Found ${validTracks.length} valid tracks out of ${tracks.items.length}`);
-
-                // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
-                const tracksToProcess = validTracks.slice(0, 100);
-                const ids = tracksToProcess.map(t => t.track.id).join(",");
-
-                // 2. Récupérer les audio features (handle 403 – Premium required)
-                let audioFeatures = null; // null indicates fallback needed
                 try {
-                    const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                    console.log("Starting sort for playlist:", playlistId);
+
+                    // 1. Récupérer les morceaux
+                    const tracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
                         headers: { Authorization: "Bearer " + accessToken }
                     });
-                    if (audioResp.ok) {
-                        const audio = await audioResp.json();
-                        audioFeatures = audio.audio_features;
-                    } else if (audioResp.status === 403) {
-                        // Premium required – fallback to sorting by track name
-                        statusEl.textContent = "⚠️ Audio features require Spotify Premium – sorting by name instead.";
-                        console.warn('Audio features 403 – Premium required');
-                    } else {
-                        const errBody = await audioResp.text();
-                        console.error('Audio Features Error Body:', errBody);
-                        throw new Error('Erreur audio features: ' + audioResp.status);
-                    }
-                } catch (e) {
-                    console.error('Error fetching audio features:', e);
-                    throw new Error('Erreur audio features: ' + e.message);
-                }
+                    if (!tracksResp.ok) throw new Error("Erreur fetch tracks: " + tracksResp.status);
+                    const tracks = await tracksResp.json();
+                    console.log("Tracks fetched:", tracks);
 
-                // 3. Trier (or fallback)
-                let sorted = [];
-                if (audioFeatures) {
-                    // Normal sorting by danceability
-                    for (let i = 0; i < audioFeatures.length; i++) {
-                        const feature = audioFeatures[i];
-                        const track = tracksToProcess[i];
-                        if (feature) {
-                            sorted.push({ uri: track.track.uri, danceability: feature.danceability });
+                    if (!tracks.items || tracks.items.length === 0) {
+                        throw new Error("Cette playlist est vide !");
+                    }
+
+                    // FILTRAGE DES TRACKS VALIDES (Pas de fichiers locaux, pas de null)
+                    const validTracks = tracks.items.filter(t => t.track && t.track.id);
+
+                    if (validTracks.length === 0) {
+                        throw new Error("Aucun morceau valide trouvé (peut-être que des fichiers locaux ?)");
+                    }
+
+                    console.log(`Found ${validTracks.length} valid tracks out of ${tracks.items.length}`);
+
+                    // Note: Spotify API limit is 100 IDs per request. For simplicity, we take the first 100.
+                    const tracksToProcess = validTracks.slice(0, 100);
+                    const ids = tracksToProcess.map(t => t.track.id).join(",");
+
+                    // 2. Récupérer les audio features (handle 403 – Premium required)
+                    let audioFeatures = null; // null indicates fallback needed
+                    try {
+                        const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${ids}`, {
+                            headers: { Authorization: "Bearer " + accessToken }
+                        });
+                        if (audioResp.ok) {
+                            const audio = await audioResp.json();
+                            audioFeatures = audio.audio_features;
+                        } else if (audioResp.status === 403) {
+                            // Premium required – fallback to sorting by track name
+                            statusEl.textContent = "⚠️ Audio features require Spotify Premium – sorting by name instead.";
+                            console.warn('Audio features 403 – Premium required');
                         } else {
-                            sorted.push({ uri: track.track.uri, danceability: 0 });
+                            const errBody = await audioResp.text();
+                            console.error('Audio Features Error Body:', errBody);
+                            throw new Error('Erreur audio features: ' + audioResp.status);
+                        }
+                    } catch (e) {
+                        console.error('Error fetching audio features:', e);
+                        throw new Error('Erreur audio features: ' + e.message);
+                    }
+
+                    // 3. Trier (or fallback)
+                    let sorted = [];
+                    if (audioFeatures) {
+                        // Normal sorting by danceability
+                        for (let i = 0; i < audioFeatures.length; i++) {
+                            const feature = audioFeatures[i];
+                            const track = tracksToProcess[i];
+                            if (feature) {
+                                sorted.push({ uri: track.track.uri, danceability: feature.danceability });
+                            } else {
+                                sorted.push({ uri: track.track.uri, danceability: 0 });
+                            }
+                        }
+                        sorted.sort((a, b) => a.danceability - b.danceability);
+                    } else {
+                        // Fallback: sort alphabetically by track name
+                        sorted = tracksToProcess
+                            .map(t => ({ uri: t.track.uri, name: t.track.name || '' }))
+                            .sort((a, b) => a.name.localeCompare(b.name));
+                    }
+
+                    statusEl.textContent = "Création de la nouvelle playlist…";
+
+                    // 4. Créer playlist
+                    const meResp = await fetch("https://api.spotify.com/v1/me", {
+                        headers: { Authorization: "Bearer " + accessToken }
+                    });
+                    if (!meResp.ok) throw new Error("Erreur fetch me: " + meResp.status);
+                    const me = await meResp.json();
+
+                    const newPlaylistResp = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
+                        method: "POST",
+                        headers: {
+                            Authorization: "Bearer " + accessToken,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            name: "Playlist Triée 💿",
+                            description: "Créée automatiquement par Triateur",
+                            public: false
+                        })
+                    });
+                    if (!newPlaylistResp.ok) throw new Error("Erreur création playlist: " + newPlaylistResp.status);
+                    const newPlaylist = await newPlaylistResp.json();
+
+                    // 5. Ajouter morceaux
+                    const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
+                        method: "POST",
+                        headers: {
+                            Authorization: "Bearer " + accessToken,
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({
+                            uris: sorted.map(s => s.uri)
+                        })
+                    });
+                    if (!addTracksResp.ok) throw new Error("Erreur ajout tracks: " + addTracksResp.status);
+
+                    statusEl.textContent = "🎉 Playlist triée créée : " + newPlaylist.name;
+                    statusEl.style.color = "green";
+
+                } catch (err) {
+                    console.error(err);
+                    statusEl.textContent = "❌ Erreur : " + err.message;
+                    statusEl.style.color = "red";
+                }
+            };
+            // ------------------------------------------------------
+            // ANALYZE LOGIC
+            // ------------------------------------------------------
+            document.getElementById("analyzeBtn").onclick = async () => {
+                const playlistId = document.getElementById("playlistSelect").value;
+                const statusEl = document.getElementById("status");
+                const resultsContainer = document.getElementById("resultsContainer");
+                const tbody = document.getElementById("tracksTableBody");
+
+                // Reset UI
+                resultsContainer.style.display = "none";
+                tbody.innerHTML = "";
+                statusEl.textContent = "Analyse en cours… (Récupération des pistes)";
+                statusEl.style.color = "black";
+
+                try {
+                    // 1. Fetch Tracks
+                    const tracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
+                        headers: { Authorization: "Bearer " + accessToken }
+                    });
+                    if (!tracksResp.ok) throw new Error("Erreur fetch tracks: " + tracksResp.status);
+                    const tracksData = await tracksResp.json();
+
+                    // Filter valid tracks
+                    const validItems = tracksData.items.filter(t => t.track && t.track.id);
+                    if (validItems.length === 0) throw new Error("Aucune piste valide trouvée.");
+
+                    // Limit to 100 for now
+                    const itemsToProcess = validItems.slice(0, 100);
+                    const trackIds = itemsToProcess.map(t => t.track.id).join(",");
+
+                    // 2. Fetch Artists (for Genres)
+                    statusEl.textContent = "Analyse en cours… (Récupération des genres)";
+                    const artistIds = [...new Set(itemsToProcess.flatMap(t => t.track.artists.map(a => a.id)))];
+                    // Spotify allows max 50 artists per request
+                    const artistChunks = [];
+                    for (let i = 0; i < artistIds.length; i += 50) {
+                        artistChunks.push(artistIds.slice(i, i + 50));
+                    }
+
+                    const artistMap = {}; // id -> { genres: [] }
+                    for (const chunk of artistChunks) {
+                        const artistsResp = await fetch(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
+                            headers: { Authorization: "Bearer " + accessToken }
+                        });
+                        if (artistsResp.ok) {
+                            const artistsData = await artistsResp.json();
+                            artistsData.artists.forEach(a => {
+                                artistMap[a.id] = a;
+                            });
                         }
                     }
-                    sorted.sort((a, b) => a.danceability - b.danceability);
-                } else {
-                    // Fallback: sort alphabetically by track name
-                    sorted = tracksToProcess
-                        .map(t => ({ uri: t.track.uri, name: t.track.name || '' }))
-                        .sort((a, b) => a.name.localeCompare(b.name));
+
+                    // 3. Fetch Audio Features (Handle 403)
+                    statusEl.textContent = "Analyse en cours… (Récupération des audio features)";
+                    let audioFeaturesMap = {}; // id -> feature object
+                    try {
+                        const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${trackIds}`, {
+                            headers: { Authorization: "Bearer " + accessToken }
+                        });
+                        if (audioResp.ok) {
+                            const audioData = await audioResp.json();
+                            audioData.audio_features.forEach(f => {
+                                if (f) audioFeaturesMap[f.id] = f;
+                            });
+                        } else if (audioResp.status === 403) {
+                            console.warn("Audio Features: 403 Forbidden (Premium required)");
+                            // Don't throw, just leave map empty
+                        }
+                    } catch (e) {
+                        console.error("Error fetching audio features", e);
+                    }
+
+                    // 4. Build Data & Render
+                    const fullData = itemsToProcess.map((item, index) => {
+                        const t = item.track;
+                        const feat = audioFeaturesMap[t.id] || null;
+
+                        // Resolve Genres (take from first artist)
+                        const mainArtistId = t.artists[0]?.id;
+                        const genres = artistMap[mainArtistId]?.genres?.join(", ") || "";
+
+                        // Camelot Key
+                        let camelot = "N/A";
+                        if (feat) {
+                            camelot = getCamelotKey(feat.key, feat.mode);
+                        }
+
+                        return {
+                            index: index + 1,
+                            name: t.name,
+                            artist: t.artists.map(a => a.name).join(", "),
+                            genre: genres,
+                            popularity: t.popularity,
+                            bpm: feat ? Math.round(feat.tempo) : "N/A",
+                            keyCamelot: camelot,
+                            danceability: feat ? feat.danceability : "N/A",
+                            energy: feat ? feat.energy : "N/A",
+                            valence: feat ? feat.valence : "N/A"
+                        };
+                    });
+
+                    // Render Table
+                    fullData.forEach(row => {
+                        const tr = document.createElement("tr");
+                        tr.innerHTML = `
+                        <td>${row.index}</td>
+                        <td>${row.name}</td>
+                        <td>${row.artist}</td>
+                        <td>${row.genre}</td>
+                        <td>${row.popularity}</td>
+                        <td>${row.bpm}</td>
+                        <td>${row.keyCamelot}</td>
+                        <td>${row.danceability}</td>
+                        <td>${row.energy}</td>
+                        <td>${row.valence}</td>
+                    `;
+                        tbody.appendChild(tr);
+                    });
+
+                    resultsContainer.style.display = "block";
+                    statusEl.textContent = "✅ Analyse terminée !";
+                    statusEl.style.color = "green";
+
+                    // Setup Export
+                    document.getElementById("exportBtn").onclick = () => exportToCSV(fullData);
+
+                } catch (err) {
+                    console.error(err);
+                    statusEl.textContent = "❌ Erreur : " + err.message;
+                    statusEl.style.color = "red";
                 }
+            };
 
-                statusEl.textContent = "Création de la nouvelle playlist…";
+            function getCamelotKey(key, mode) {
+                // Pitch class to Camelot mapping
+                // Mode: 1 = Major (B), 0 = Minor (A)
+                const pitchClass = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+                // Camelot Major (B): C=8B, C#=3B, D=10B, D#=5B, E=12B, F=7B, F#=2B, G=9B, G#=4B, A=11B, A#=6B, B=1B
+                const majorMap = { 0: "8B", 1: "3B", 2: "10B", 3: "5B", 4: "12B", 5: "7B", 6: "2B", 7: "9B", 8: "4B", 9: "11B", 10: "6B", 11: "1B" };
+                // Camelot Minor (A): C=5A, C#=12A, D=7A, D#=2A, E=9A, F=4A, F#=11A, G=6A, G#=1A, A=8A, A#=3A, B=10A
+                const minorMap = { 0: "5A", 1: "12A", 2: "7A", 3: "2A", 4: "9A", 5: "4A", 6: "11A", 7: "6A", 8: "1A", 9: "8A", 10: "3A", 11: "10A" };
 
-                // 4. Créer playlist
-                const meResp = await fetch("https://api.spotify.com/v1/me", {
-                    headers: { Authorization: "Bearer " + accessToken }
-                });
-                if (!meResp.ok) throw new Error("Erreur fetch me: " + meResp.status);
-                const me = await meResp.json();
-
-                const newPlaylistResp = await fetch(`https://api.spotify.com/v1/users/${me.id}/playlists`, {
-                    method: "POST",
-                    headers: {
-                        Authorization: "Bearer " + accessToken,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        name: "Playlist Triée 💿",
-                        description: "Créée automatiquement par Triateur",
-                        public: false
-                    })
-                });
-                if (!newPlaylistResp.ok) throw new Error("Erreur création playlist: " + newPlaylistResp.status);
-                const newPlaylist = await newPlaylistResp.json();
-
-                // 5. Ajouter morceaux
-                const addTracksResp = await fetch(`https://api.spotify.com/v1/playlists/${newPlaylist.id}/tracks`, {
-                    method: "POST",
-                    headers: {
-                        Authorization: "Bearer " + accessToken,
-                        "Content-Type": "application/json"
-                    },
-                    body: JSON.stringify({
-                        uris: sorted.map(s => s.uri)
-                    })
-                });
-                if (!addTracksResp.ok) throw new Error("Erreur ajout tracks: " + addTracksResp.status);
-
-                statusEl.textContent = "🎉 Playlist triée créée : " + newPlaylist.name;
-                statusEl.style.color = "green";
-
-            } catch (err) {
-                console.error(err);
-                statusEl.textContent = "❌ Erreur : " + err.message;
-                statusEl.style.color = "red";
+                if (key === -1) return "N/A";
+                return mode === 1 ? majorMap[key] : minorMap[key];
             }
-        };
-    </script>
+
+            function exportToCSV(data) {
+                const headers = ["#", "Titre", "Artiste", "Genre", "Popularité", "BPM", "Key (Camelot)", "Danceability", "Energy", "Valence"];
+                const rows = data.map(row => [
+                    row.index,
+                    `"${row.name.replace(/"/g, '""')}"`, // Escape quotes
+                    `"${row.artist.replace(/"/g, '""')}"`,
+                    `"${row.genre.replace(/"/g, '""')}"`,
+                    row.popularity,
+                    row.bpm,
+                    row.keyCamelot,
+                    row.danceability,
+                    row.energy,
+                    row.valence
+                ]);
+
+                const csvContent = "\uFEFF" + [headers.join(","), ...rows.map(r => r.join(","))].join("\n");
+                const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.setAttribute("href", url);
+                link.setAttribute("download", "playlist_analysis.csv");
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            }
+        </script>
 </body>
 
 </html>

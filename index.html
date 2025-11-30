@@ -89,20 +89,17 @@
             </div>
         </div>
 
+        <div id="debugLog"
+            style="margin-top: 30px; background: #000; color: #0f0; padding: 15px; font-family: monospace; border-radius: 5px; max-height: 300px; overflow-y: auto; display: none;">
+            <strong>Debug Log:</strong><br>
+        </div>
+
         <script>
             // ------------------------------------------------------
             // CONFIGURATION
             // ------------------------------------------------------
-            const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
-
-            // DYNAMIC REDIRECT URI
-            let redirectUri = window.location.origin + window.location.pathname;
-            if (redirectUri.endsWith("index.html")) {
-                redirectUri = redirectUri.substring(0, redirectUri.length - "index.html".length);
-            }
-            if (!redirectUri.endsWith("/") && !redirectUri.endsWith(".html")) {
-                redirectUri += "/";
-            }
+            const CLIENT_ID = "0601fb21393343948a562e129e95d129";
+            const redirectUri = "https://jlbaenlo.github.io/";
 
             let accessToken = null;
 
@@ -374,19 +371,25 @@
                 // Reset UI
                 resultsContainer.style.display = "none";
                 tbody.innerHTML = "";
-                statusEl.textContent = "Analyse en cours… (Récupération des pistes)";
+                statusEl.textContent = "Analyse en cours…";
                 statusEl.style.color = "black";
+                document.getElementById("debugLog").innerHTML = "<strong>Debug Log:</strong><br>"; // Clear log
+
+                logDebug("Starting analysis for playlist: " + playlistId);
 
                 try {
                     // 1. Fetch Tracks
+                    logDebug("Fetching tracks...");
                     const tracksResp = await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
                         headers: { Authorization: "Bearer " + accessToken }
                     });
+                    logDebug(`Tracks Fetch Status: ${tracksResp.status}`);
                     if (!tracksResp.ok) throw new Error("Erreur fetch tracks: " + tracksResp.status);
                     const tracksData = await tracksResp.json();
 
                     // Filter valid tracks
                     const validItems = tracksData.items.filter(t => t.track && t.track.id);
+                    logDebug(`Found ${validItems.length} valid tracks.`);
                     if (validItems.length === 0) throw new Error("Aucune piste valide trouvée.");
 
                     // Limit to 100 for now
@@ -395,8 +398,10 @@
 
                     // 2. Fetch Artists (for Genres)
                     statusEl.textContent = "Analyse en cours… (Récupération des genres)";
+                    logDebug("Fetching artists (for genres)...");
                     const artistIds = [...new Set(itemsToProcess.flatMap(t => t.track.artists.map(a => a.id)))];
-                    // Spotify allows max 50 artists per request
+                    logDebug(`Unique artists to fetch: ${artistIds.length}`);
+
                     const artistChunks = [];
                     for (let i = 0; i < artistIds.length; i += 50) {
                         artistChunks.push(artistIds.slice(i, i + 50));
@@ -407,6 +412,7 @@
                         const artistsResp = await fetch(`https://api.spotify.com/v1/artists?ids=${chunk.join(",")}`, {
                             headers: { Authorization: "Bearer " + accessToken }
                         });
+                        logDebug(`Artists Chunk Status: ${artistsResp.status}`);
                         if (artistsResp.ok) {
                             const artistsData = await artistsResp.json();
                             artistsData.artists.forEach(a => {
@@ -417,27 +423,42 @@
 
                     // 3. Fetch Audio Features (Handle 403)
                     statusEl.textContent = "Analyse en cours… (Récupération des audio features)";
+                    logDebug("Fetching audio features...");
                     let audioFeaturesMap = {}; // id -> feature object
                     try {
                         const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${trackIds}`, {
                             headers: { Authorization: "Bearer " + accessToken }
                         });
+                        logDebug(`Audio Features Status: ${audioResp.status}`);
+
                         if (audioResp.ok) {
                             const audioData = await audioResp.json();
-                            audioData.audio_features.forEach(f => {
-                                if (f) audioFeaturesMap[f.id] = f;
-                            });
+                            if (audioData.audio_features) {
+                                logDebug(`Received ${audioData.audio_features.length} audio features.`);
+                                audioData.audio_features.forEach(f => {
+                                    if (f) audioFeaturesMap[f.id] = f;
+                                });
+                            } else {
+                                logDebug("⚠️ Received OK response but 'audio_features' is missing or empty.");
+                            }
                         } else if (audioResp.status === 403) {
-                            console.warn("Audio Features: 403 Forbidden (Premium required)");
+                            logDebug("❌ Audio Features: 403 Forbidden. (Premium required or App restriction)");
+                            console.warn("Audio Features: 403 Forbidden");
                             // Don't throw, just leave map empty
+                        } else {
+                            logDebug(`❌ Audio Features Error: ${audioResp.status}`);
                         }
                     } catch (e) {
+                        logDebug(`❌ Exception fetching audio features: ${e.message}`);
                         console.error("Error fetching audio features", e);
                     }
 
                     // 4. Fetch Albums (for Record Label & Release Date)
                     statusEl.textContent = "Analyse en cours… (Récupération des albums)";
+                    logDebug("Fetching albums (for labels)...");
                     const albumIds = [...new Set(itemsToProcess.map(t => t.track.album.id))];
+                    logDebug(`Unique albums to fetch: ${albumIds.length}`);
+
                     const albumChunks = [];
                     for (let i = 0; i < albumIds.length; i += 20) {
                         albumChunks.push(albumIds.slice(i, i + 20));
@@ -448,15 +469,19 @@
                         const albumsResp = await fetch(`https://api.spotify.com/v1/albums?ids=${chunk.join(",")}`, {
                             headers: { Authorization: "Bearer " + accessToken }
                         });
+                        logDebug(`Albums Chunk Status: ${albumsResp.status}`);
                         if (albumsResp.ok) {
                             const albumsData = await albumsResp.json();
                             albumsData.albums.forEach(a => {
                                 albumMap[a.id] = a;
                             });
+                        } else {
+                            logDebug(`❌ Albums Fetch Error: ${albumsResp.status}`);
                         }
                     }
 
                     // 5. Build Data & Render
+                    logDebug("Building table data...");
                     const fullData = itemsToProcess.map((item, index) => {
                         const t = item.track;
                         const feat = audioFeaturesMap[t.id] || null;

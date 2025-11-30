@@ -61,12 +61,50 @@
             // mais si l'utilisateur est sur /test, ça reste /test.
         }
 
-        // AFFICHER L'URI POUR DEBUG
-        const debugInfo = document.createElement("p");
-        debugInfo.style.background = "#eee";
-        debugInfo.style.padding = "10px";
-        debugInfo.innerHTML = `<strong>Redirect URI à ajouter dans le Dashboard Spotify :</strong><br><code>${redirectUri}</code>`;
-        document.body.insertBefore(debugInfo, document.getElementById("loginBtn"));
+        // AFFICHER L'URI POUR DEBUG AVEC BOUTON COPIER
+        const debugContainer = document.createElement("div");
+        debugContainer.style.background = "#f0f0f0";
+        debugContainer.style.border = "1px solid #ccc";
+        debugContainer.style.padding = "15px";
+        debugContainer.style.margin = "20px 0";
+        debugContainer.style.borderRadius = "5px";
+
+        const debugTitle = document.createElement("strong");
+        debugTitle.textContent = "⚠️ CONFIGURATION REQUISE :";
+        debugContainer.appendChild(debugTitle);
+
+        const debugText = document.createElement("p");
+        debugText.innerHTML = `Ajoutez cette URI exacte dans votre Dashboard Spotify (<a href='https://developer.spotify.com/dashboard' target='_blank'>lien</a>) :`;
+        debugContainer.appendChild(debugText);
+
+        const codeBlock = document.createElement("code");
+        codeBlock.style.display = "block";
+        codeBlock.style.background = "#fff";
+        codeBlock.style.padding = "10px";
+        codeBlock.style.border = "1px solid #ddd";
+        codeBlock.style.margin = "10px 0";
+        codeBlock.style.wordBreak = "break-all";
+        codeBlock.textContent = redirectUri;
+        debugContainer.appendChild(codeBlock);
+
+        const copyBtn = document.createElement("button");
+        copyBtn.textContent = "Copier l'URI";
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(redirectUri).then(() => {
+                copyBtn.textContent = "Copié ! ✅";
+                setTimeout(() => copyBtn.textContent = "Copier l'URI", 2000);
+            });
+        };
+        debugContainer.appendChild(copyBtn);
+
+        const details = document.createElement("small");
+        details.style.display = "block";
+        details.style.marginTop = "10px";
+        details.style.color = "#666";
+        details.textContent = `(Longueur: ${redirectUri.length} caractères. Assurez-vous qu'il n'y a pas d'espace en trop dans le Dashboard)`;
+        debugContainer.appendChild(details);
+
+        document.body.insertBefore(debugContainer, document.getElementById("loginBtn"));
 
         // Scopes nécessaires
         const scope = [

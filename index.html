@@ -255,8 +255,26 @@
 
                 headers.forEach(header => {
                     const td = document.createElement('td');
-                    // Basic formatting for known types could go here, but raw is safer for "all fields"
-                    td.textContent = row[header];
+                    let value = row[header];
+
+                    // Formatting for specific columns
+                    const lowerHeader = header.toLowerCase();
+                    if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
+                        const num = parseFloat(value);
+                        if (!isNaN(num)) value = num.toFixed(3);
+                    } else if (lowerHeader.includes('loudness') || lowerHeader.includes('tempo') || lowerHeader.includes('bpm')) {
+                        const num = parseFloat(value);
+                        if (!isNaN(num)) value = Math.round(num);
+                    } else if (lowerHeader.includes('duration')) {
+                        const ms = parseInt(value);
+                        if (!isNaN(ms)) {
+                            const min = Math.floor(ms / 60000);
+                            const sec = ((ms % 60000) / 1000).toFixed(0).padStart(2, '0');
+                            value = `${min}:${sec}`;
+                        }
+                    }
+
+                    td.textContent = value;
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);

@@ -170,7 +170,7 @@
                 </div>
                 <div>
                     <label>Nombre de Phases:</label>
-                    <input type="number" id="numPhases" value="4" min="2" max="10" style="width: 60px; padding: 5px;">
+                    <input type="number" id="numPhases" value="5" min="2" max="10" style="width: 60px; padding: 5px;">
                 </div>
                 <button class="action-btn" onclick="initGraph()">🔄 Réinitialiser le Graph</button>
             </div>
@@ -328,18 +328,35 @@
         document.getElementById('numPhases').addEventListener('change', initGraph);
 
         function initGraph() {
-            const numPhases = parseInt(document.getElementById('numPhases').value) || 4;
+            const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
             graphData = [];
 
-            for (let i = 0; i < numPhases; i++) {
-                // Default values (zig-zag for demo)
-                const isPeak = i % 2 !== 0;
-                graphData.push({
-                    energy: isPeak ? 0.8 : 0.4,
-                    dance: isPeak ? 0.8 : 0.5,
-                    valence: 0.5,
-                    tempo: isPeak ? 0.7 : 0.4 // 0.5 = 130 BPM approx (range 60-200)
-                });
+            // DJ Party Curve Standards (approximate)
+            // If 5 phases, we use a specific "Warmup -> Build -> Peak -> Sustain -> Cool Down" curve.
+            // Otherwise, we generate a generic build-up curve.
+
+            if (numPhases === 5) {
+                graphData = [
+                    { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35 }, // Warm-up (~110 BPM)
+                    { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45 }, // Build (~123 BPM)
+                    { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55 }, // Peak (~137 BPM)
+                    { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5 }, // Sustain (~130 BPM)
+                    { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35 }  // Cool Down (~110 BPM)
+                ];
+            } else {
+                // Generic Build-Up Curve for other phase counts
+                for (let i = 0; i < numPhases; i++) {
+                    const progress = i / (numPhases - 1);
+                    // Parabolic arc: Start low, peak at 75%, drop slightly
+                    let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
+
+                    graphData.push({
+                        energy: intensity,
+                        dance: Math.min(1, intensity + 0.1),
+                        valence: 0.5 + (intensity * 0.3),
+                        tempo: 0.3 + (intensity * 0.3)
+                    });
+                }
             }
             drawGraph();
         }

@@ -155,8 +155,16 @@
 
         <div class="step">
             <h3>Étape 2 : Importer le fichier CSV</h3>
-            <p>Sélectionnez le fichier <code>.csv</code> que vous venez de télécharger.</p>
-            <input type="file" id="csvFileInput" accept=".csv" />
+            <p>Sélectionnez le fichier <code>.csv</code> que
+            <div style="margin-top: 10px;">
+                <input type="file" id="csvFile" accept=".csv" />
+                <div id="importStats" style="margin-top: 10px; font-weight: bold; color: #2196F3;"></div>
+            </div>
+
+            <div id="originalPlaylistContainer"
+                style="max-height: 300px; overflow-y: auto; margin-top: 15px; border: 1px solid #eee; display: none;">
+                <!-- Original table will be moved here -->
+            </div>
         </div>
 
         <div id="phaseConfigStep" class="step" style="display:none;">
@@ -165,12 +173,15 @@
 
             <div style="display:flex; gap: 20px; margin-bottom: 20px; align-items: center;">
                 <div>
-                    <label>Durée Totale (min):</label>
-                    <input type="number" id="targetDuration" value="60" style="width: 80px; padding: 5px;">
-                </div>
-                <div>
                     <label>Début:</label>
                     <input type="time" id="startTime" value="21:00" style="padding: 5px; width: 80px;">
+                </div>
+                <div>
+                    <label>Fin:</label>
+                    <input type="time" id="endTime" value="22:00" style="padding: 5px; width: 80px;">
+                </div>
+                <div style="display: flex; align-items: center; font-size: 0.9em; color: #666;">
+                    <span id="calculatedDuration">Durée: 1h 00m</span>
                 </div>
                 <div>
                     <label>Mode:</label>
@@ -200,647 +211,688 @@
                     💡 Cliquez et glissez les points pour ajuster les courbes.
                 </p>
             </div>
+            <div id="resultStats" style="margin-top: 20px; font-weight: bold; color: #4CAF50;"></div>
+            <div id="results"></div>
 
-            <button class="action-btn" style="background-color: #9C27B0; margin-top:20px; width:100%;"
-                onclick="generateFlow()">✨ Générer la Playlist ✨</button>
-        </div>
-
-        <div id="status"></div>
-
-        <div id="resultsContainer">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                <h3>Résultats de l'analyse</h3>
-                <button id="exportBtn" class="action-btn" style="background-color: #2196F3;">📥 Ré-exporter CSV</button>
+            <div id="resultsContainer">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>Résultats de l'analyse</h3>
+                    <button id="exportBtn" class="action-btn" style="background-color: #2196F3;">📥 Ré-exporter
+                        CSV</button>
+                </div>
+                <table id="tracksTable">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Titre</th>
+                            <th>Artiste</th>
+                            <th>Album</th>
+                            <th>BPM</th>
+                            <th>Key (Camelot)</th>
+                            <th>Dance</th>
+                            <th>Energy</th>
+                            <th>Valence</th>
+                            <th>Durée</th>
+                            <th>Genre</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tracksTableBody"></tbody>
+                </table>
             </div>
-            <table id="tracksTable">
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Titre</th>
-                        <th>Artiste</th>
-                        <th>Album</th>
-                        <th>BPM</th>
-                        <th>Key (Camelot)</th>
-                        <th>Dance</th>
-                        <th>Energy</th>
-                        <th>Valence</th>
-                        <th>Durée</th>
-                        <th>Genre</th>
-                    </tr>
-                </thead>
-                <tbody id="tracksTableBody"></tbody>
-            </table>
         </div>
-    </div>
 
-    <script>
-        // Camelot Helper
-        function getCamelotKey(key, mode) {
-            // Exportify usually gives Key as integer (0-11) and Mode as integer (0 or 1)
-            // Sometimes it gives text. We assume standard Spotify integer format first.
-            const k = parseInt(key);
-            const m = parseInt(mode);
+        <script>
+            // Camelot Helper
+            function getCamelotKey(key, mode) {
+                // Exportify usually gives Key as integer (0-11) and Mode as integer (0 or 1)
+                // Sometimes it gives text. We assume standard Spotify integer format first.
+                const k = parseInt(key);
+                const m = parseInt(mode);
 
-            if (isNaN(k) || isNaN(m) || k === -1) return "N/A";
+                if (isNaN(k) || isNaN(m) || k === -1) return "N/A";
 
-            // Camelot Major (Mode 1): 0=8B, 1=3B, 2=10B, 3=5B, 4=12B, 5=7B, 6=2B, 7=9B, 8=4B, 9=11B, 10=6B, 11=1B
-            const majorMap = { 0: "8B", 1: "3B", 2: "10B", 3: "5B", 4: "12B", 5: "7B", 6: "2B", 7: "9B", 8: "4B", 9: "11B", 10: "6B", 11: "1B" };
-            // Camelot Minor (Mode 0): 0=5A, 1=12A, 2=7A, 3=2A, 4=9A, 5=4A, 6=11A, 7=6A, 8=1A, 9=8A, 10=3A, 11=10A
-            const minorMap = { 0: "5A", 1: "12A", 2: "7A", 3: "2A", 4: "9A", 5: "4A", 6: "11A", 7: "6A", 8: "1A", 9: "8A", 10: "3A", 11: "10A" };
+                // Camelot Major (Mode 1): 0=8B, 1=3B, 2=10B, 3=5B, 4=12B, 5=7B, 6=2B, 7=9B, 8=4B, 9=11B, 10=6B, 11=1B
+                const majorMap = { 0: "8B", 1: "3B", 2: "10B", 3: "5B", 4: "12B", 5: "7B", 6: "2B", 7: "9B", 8: "4B", 9: "11B", 10: "6B", 11: "1B" };
+                // Camelot Minor (Mode 0): 0=5A, 1=12A, 2=7A, 3=2A, 4=9A, 5=4A, 6=11A, 7=6A, 8=1A, 9=8A, 10=3A, 11=10A
+                const minorMap = { 0: "5A", 1: "12A", 2: "7A", 3: "2A", 4: "9A", 5: "4A", 6: "11A", 7: "6A", 8: "1A", 9: "8A", 10: "3A", 11: "10A" };
 
-            return m === 1 ? majorMap[k] : minorMap[k];
-        }
+                return m === 1 ? majorMap[k] : minorMap[k];
+            }
 
-        function getAggregatedGenre(genreString) {
-            if (!genreString) return "Unknown";
-            const g = genreString.toLowerCase();
+            function getAggregatedGenre(genreString) {
+                if (!genreString) return "Unknown";
+                const g = genreString.toLowerCase();
 
-            if (g.match(/hip hop|rap|trap|drill|grime/)) return "Hip Hop / Rap";
-            if (g.match(/house|techno|edm|dance|electronic|trance|dubstep|disco/)) return "Electronic / Dance";
-            if (g.match(/rock|metal|punk|indie|grunge|alternative/)) return "Rock / Indie";
-            if (g.match(/pop|r&b|soul|funk/)) return "Pop / R&B";
-            if (g.match(/jazz|blues/)) return "Jazz / Blues";
-            if (g.match(/classical|score|soundtrack|orchestral/)) return "Classical / Cinematic";
-            if (g.match(/reggae|dancehall/)) return "Reggae / Dancehall";
-            if (g.match(/latin|reggaeton|salsa/)) return "Latin";
-            if (g.match(/folk|acoustic|singer-songwriter/)) return "Folk / Acoustic";
+                if (g.match(/hip hop|rap|trap|drill|grime/)) return "Hip Hop / Rap";
+                if (g.match(/house|techno|edm|dance|electronic|trance|dubstep|disco/)) return "Electronic / Dance";
+                if (g.match(/rock|metal|punk|indie|grunge|alternative/)) return "Rock / Indie";
+                if (g.match(/pop|r&b|soul|funk/)) return "Pop / R&B";
+                if (g.match(/jazz|blues/)) return "Jazz / Blues";
+                if (g.match(/classical|score|soundtrack|orchestral/)) return "Classical / Cinematic";
+                if (g.match(/reggae|dancehall/)) return "Reggae / Dancehall";
+                if (g.match(/latin|reggaeton|salsa/)) return "Latin";
+            }
 
-            return "Other";
-        }
+            // Duration Calculation Logic
+            const startTimeEl = document.getElementById('startTime');
+            const endTimeEl = document.getElementById('endTime');
+            const durationDisplay = document.getElementById('calculatedDuration');
 
-        document.getElementById('csvFileInput').addEventListener('change', function (e) {
-            const file = e.target.files[0];
-            if (!file) return;
+            function updateDuration() {
+                const start = startTimeEl.value;
+                const end = endTimeEl.value;
+                if (!start || !end) return 0;
 
-            const statusEl = document.getElementById('status');
-            statusEl.textContent = "Lecture du fichier...";
-            statusEl.className = "";
+                const [startH, startM] = start.split(':').map(Number);
+                const [endH, endM] = end.split(':').map(Number);
 
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: true,
-                complete: function (results) {
-                    if (results.errors.length > 0) {
-                        console.error("CSV Errors:", results.errors);
-                        statusEl.textContent = "❌ Erreur lors de la lecture du CSV.";
-                        statusEl.className = "error";
-                        return;
-                    }
+                let startMin = startH * 60 + startM;
+                let endMin = endH * 60 + endM;
 
-                    let data = results.data;
-                    console.log("Parsed Data:", data);
-
-                    if (data.length === 0) {
-                        statusEl.textContent = "⚠️ Le fichier semble vide.";
-                        statusEl.className = "error";
-                        return;
-                    }
-
-                    // Process Data: Add Aggregated Genre
-                    data = data.map(row => {
-                        const rawGenre = row["Genres"] || "";
-                        const aggGenre = getAggregatedGenre(rawGenre);
-
-                        // Create a new object to control order (put Aggregated Genre FIRST)
-                        return {
-                            "Aggregated Genre": aggGenre,
-                            ...row
-                        };
-                    });
-
-                    // Store global data for the algorithm
-                    window.allTracks = data;
-
-                    displayResults(data);
-                    statusEl.textContent = `✅ ${data.length} morceaux chargés !`;
-                    statusEl.className = "success";
-
-                    // Show Phase Config
-                    document.getElementById('phaseConfigStep').style.display = 'block';
-                    initGraph(); // Initialize Graph
-                },
-                error: function (err) {
-                    console.error("PapaParse Error:", err);
-                    statusEl.textContent = "❌ Erreur critique de parsing.";
-                    statusEl.className = "error";
+                if (endMin < startMin) {
+                    endMin += 24 * 60; // Handle overnight
                 }
+
+                const diffMin = endMin - startMin;
+                const h = Math.floor(diffMin / 60);
+                const m = diffMin % 60;
+                durationDisplay.textContent = `Durée: ${h}h ${m.toString().padStart(2, '0')}m`;
+
+                // Store the calculated duration globally or in an accessible element for drawGraph
+                // For now, let's assume drawGraph can access it or we'll pass it.
+                // A hidden input or a global variable might be needed if drawGraph doesn't get it from the DOM.
+                // Let's add a hidden input for targetDuration as it's referenced in drawGraph.
+                let targetDurationInput = document.getElementById('targetDuration');
+                if (!targetDurationInput) {
+                    targetDurationInput = document.createElement('input');
+                    targetDurationInput.type = 'hidden';
+                    targetDurationInput.id = 'targetDuration';
+                    document.body.appendChild(targetDurationInput); // Append to body or a suitable parent
+                }
+                targetDurationInput.value = diffMin;
+
+                drawGraph(); // Redraw graph with new duration
+                return diffMin;
+            }
+
+            startTimeEl.addEventListener('change', updateDuration);
+            endTimeEl.addEventListener('change', updateDuration);
+            // Initial call to set duration on load
+            updateDuration();
+
+            // CSV Handling
+            let csvData = []; // Global variable to store parsed CSV data
+
+            document.getElementById('csvFile').addEventListener('change', handleFileSelect, false);
+
+            function handleFileSelect(evt) {
+                const file = evt.target.files[0];
+                if (!file) return;
+
+                const importStatsEl = document.getElementById('importStats');
+                importStatsEl.textContent = "Lecture du fichier...";
+                importStatsEl.style.color = "#2196F3"; // Reset color
+
+                Papa.parse(file, {
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: function (results) {
+                        if (results.errors.length > 0) {
+                            console.error("CSV Errors:", results.errors);
+                            let data = results.data;
+                            console.log("Parsed Data:", data);
+
+                            if (data.length === 0) {
+                                statusEl.textContent = "⚠️ Le fichier semble vide.";
+                                statusEl.className = "error";
+                                return;
+                            }
+
+                            // Process Data: Add Aggregated Genre
+                            data = data.map(row => {
+                                const rawGenre = row["Genres"] || "";
+                                const aggGenre = getAggregatedGenre(rawGenre);
+
+                                // Create a new object to control order (put Aggregated Genre FIRST)
+                                return {
+                                    "Aggregated Genre": aggGenre,
+                                    ...row
+                                };
+                            });
+
+                            // Store global data for the algorithm
+                            window.allTracks = data;
+
+                            displayResults(data);
+                            statusEl.textContent = `✅ ${data.length} morceaux chargés !`;
+                            statusEl.className = "success";
+
+                            // Show Phase Config
+                            document.getElementById('phaseConfigStep').style.display = 'block';
+                            initGraph(); // Initialize Graph
+                        },
+                        error: function (err) {
+                            console.error("PapaParse Error:", err);
+                            statusEl.textContent = "❌ Erreur critique de parsing.";
+                            statusEl.className = "error";
+                        }
+                    });
             });
-        });
 
-        // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---
+            // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---
 
-        let graphData = [];
-        const canvas = document.getElementById('flowGraph');
-        const ctx = canvas.getContext('2d');
-        let isDragging = false;
-        let dragPoint = null; // { phaseIndex, type }
+            let graphData = [];
+            const canvas = document.getElementById('flowGraph');
+            const ctx = canvas.getContext('2d');
+            let isDragging = false;
+            let dragPoint = null; // { phaseIndex, type }
 
-        // Initialize Graph Data
-        document.getElementById('numPhases').addEventListener('change', initGraph);
-        document.getElementById('flowMode').addEventListener('change', initGraph);
-        document.getElementById('startTime').addEventListener('change', drawGraph); // Redraw on time change
+            // Initialize Graph Data
+            document.getElementById('numPhases').addEventListener('change', initGraph);
+            document.getElementById('flowMode').addEventListener('change', initGraph);
+            document.getElementById('startTime').addEventListener('change', drawGraph); // Redraw on time change
 
-        function initGraph() {
-            const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
-            const mode = document.getElementById('flowMode').value;
-            graphData = [];
+            function initGraph() {
+                const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
+                const mode = document.getElementById('flowMode').value;
+                graphData = [];
 
-            const defaultDur = 1 / numPhases;
+                const defaultDur = 1 / numPhases;
 
-            if (mode === 'party') {
-                // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
-                if (numPhases === 5) {
-                    graphData = [
-                        { name: "Warm-up", energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 },
-                        { name: "Build", energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 },
-                        { name: "Peak", energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 },
-                        { name: "Sustain", energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 },
-                        { name: "Cool Down", energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }
-                    ];
-                } else {
-                    // Generic Build-Up for Party
+                if (mode === 'party') {
+                    // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
+                    if (numPhases === 5) {
+                        graphData = [
+                            { name: "Warm-up", energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 },
+                            { name: "Build", energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 },
+                            { name: "Peak", energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 },
+                            { name: "Sustain", energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 },
+                            { name: "Cool Down", energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }
+                        ];
+                    } else {
+                        // Generic Build-Up for Party
+                        for (let i = 0; i < numPhases; i++) {
+                            const progress = i / (numPhases - 1);
+                            let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
+                            graphData.push({
+                                name: `Phase ${i + 1}`,
+                                energy: intensity,
+                                dance: Math.min(1, intensity + 0.1),
+                                valence: 0.5 + (intensity * 0.3),
+                                tempo: 0.3 + (intensity * 0.3),
+                                duration: defaultDur
+                            });
+                        }
+                    }
+                } else if (mode === 'apero') {
+                    // Apéro Curve: Chill, consistent, happy but low energy
+                    const aperoNames = ["Welcome", "Chill", "Groove", "Deep", "Sunset", "Vibe", "Lounge", "Relax", "Mood", "End"];
                     for (let i = 0; i < numPhases; i++) {
-                        const progress = i / (numPhases - 1);
-                        let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
+                        // Slight wave but mostly flat
+                        const wave = Math.sin(i * 0.5) * 0.1;
                         graphData.push({
-                            name: `Phase ${i + 1}`,
-                            energy: intensity,
-                            dance: Math.min(1, intensity + 0.1),
-                            valence: 0.5 + (intensity * 0.3),
-                            tempo: 0.3 + (intensity * 0.3),
+                            name: aperoNames[i] || `Phase ${i + 1}`,
+                            energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
+                            dance: 0.4 + wave,        // Moderate Dance (groove)
+                            valence: 0.7,             // High Valence (Happy/Chill)
+                            tempo: 0.3 + (wave * 0.5), // Low Tempo (~100 BPM)
                             duration: defaultDur
                         });
                     }
                 }
-            } else if (mode === 'apero') {
-                // Apéro Curve: Chill, consistent, happy but low energy
-                const aperoNames = ["Welcome", "Chill", "Groove", "Deep", "Sunset", "Vibe", "Lounge", "Relax", "Mood", "End"];
-                for (let i = 0; i < numPhases; i++) {
-                    // Slight wave but mostly flat
-                    const wave = Math.sin(i * 0.5) * 0.1;
-                    graphData.push({
-                        name: aperoNames[i] || `Phase ${i + 1}`,
-                        energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
-                        dance: 0.4 + wave,        // Moderate Dance (groove)
-                        valence: 0.7,             // High Valence (Happy/Chill)
-                        tempo: 0.3 + (wave * 0.5), // Low Tempo (~100 BPM)
-                        duration: defaultDur
-                    });
+
+                // Fallback if length mismatch (e.g. switching numPhases manually)
+                // We ensure graphData matches numPhases
+                while (graphData.length < numPhases) {
+                    graphData.push({ name: `Phase ${graphData.length + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
                 }
-            }
-
-            // Fallback if length mismatch (e.g. switching numPhases manually)
-            // We ensure graphData matches numPhases
-            while (graphData.length < numPhases) {
-                graphData.push({ name: `Phase ${graphData.length + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
-            }
-            while (graphData.length > numPhases) {
-                graphData.pop();
-            }
-
-            // Normalize durations to ensure sum is 1.0
-            const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
-            if (Math.abs(totalDur - 1.0) > 0.01) {
-                graphData.forEach(p => p.duration = p.duration / totalDur);
-            }
-
-            drawGraph();
-        }
-
-        // Draw the Graph
-        function drawGraph() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            const padding = 40;
-            const w = canvas.width - padding * 2;
-            const h = canvas.height - padding * 2;
-            const numPhases = graphData.length;
-
-            // Time Calculation
-            const startTimeInput = document.getElementById('startTime').value || "21:00";
-            const [startH, startM] = startTimeInput.split(':').map(Number);
-            const startTotalMinutes = startH * 60 + startM;
-            const totalDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
-
-            // Calculate X positions for each phase (center) and separators
-            let currentX = padding;
-            let currentMinutes = 0;
-            const phaseCenters = [];
-            const separators = []; // { x, timeLabel }
-
-            graphData.forEach((p, i) => {
-                const phaseWidth = p.duration * w;
-                phaseCenters.push(currentX + (phaseWidth / 2));
-
-                currentX += phaseWidth;
-                currentMinutes += p.duration * totalDurationMin;
-
-                if (i < numPhases - 1) {
-                    // Calculate time label for separator
-                    const timeMins = startTotalMinutes + currentMinutes;
-                    const h = Math.floor((timeMins / 60) % 24);
-                    const m = Math.floor(timeMins % 60);
-                    const timeLabel = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                    separators.push({ x: currentX, label: timeLabel });
+                while (graphData.length > numPhases) {
+                    graphData.pop();
                 }
-            });
 
-            // Draw Grid & Axes
-            ctx.strokeStyle = '#eee';
-            ctx.lineWidth = 1;
-            ctx.beginPath();
-            // Horizontal lines
-            for (let i = 0; i <= 4; i++) {
-                const y = padding + h - (h * (i / 4));
-                ctx.moveTo(padding, y);
-                ctx.lineTo(canvas.width - padding, y);
-                ctx.fillStyle = '#999';
-                ctx.fillText(`${i * 25}%`, 5, y + 4);
+                // Normalize durations to ensure sum is 1.0
+                const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
+                if (Math.abs(totalDur - 1.0) > 0.01) {
+                    graphData.forEach(p => p.duration = p.duration / totalDur);
+                }
+
+                drawGraph();
             }
-            ctx.stroke();
 
-            // Draw Separators (Vertical Lines)
-            ctx.beginPath();
-            separators.forEach(sep => {
-                ctx.moveTo(sep.x, padding);
-                ctx.lineTo(sep.x, canvas.height - padding);
-            });
-            ctx.strokeStyle = '#ddd';
-            ctx.setLineDash([5, 5]);
-            ctx.stroke();
-            ctx.setLineDash([]);
+            // Draw the Graph
+            function drawGraph() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // Draw Separator Handles & Time Labels
-            separators.forEach(sep => {
-                // Handle
-                ctx.fillStyle = '#ccc';
-                ctx.fillRect(sep.x - 2, canvas.height - padding + 5, 4, 10);
+                const padding = 40;
+                const w = canvas.width - padding * 2;
+                const h = canvas.height - padding * 2;
+                const numPhases = graphData.length;
 
-                // Time Label
+                // Time Calculation
+                const startTimeInput = document.getElementById('startTime').value || "21:00";
+                const [startH, startM] = startTimeInput.split(':').map(Number);
+                const startTotalMinutes = startH * 60 + startM;
+                const totalDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
+
+                // Calculate X positions for each phase (center) and separators
+                let currentX = padding;
+                let currentMinutes = 0;
+                const phaseCenters = [];
+                const separators = []; // { x, timeLabel }
+
+                graphData.forEach((p, i) => {
+                    const phaseWidth = p.duration * w;
+                    phaseCenters.push(currentX + (phaseWidth / 2));
+
+                    currentX += phaseWidth;
+                    currentMinutes += p.duration * totalDurationMin;
+
+                    if (i < numPhases - 1) {
+                        // Calculate time label for separator
+                        const timeMins = startTotalMinutes + currentMinutes;
+                        const h = Math.floor((timeMins / 60) % 24);
+                        const m = Math.floor(timeMins % 60);
+                        const timeLabel = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                        separators.push({ x: currentX, label: timeLabel });
+                    }
+                });
+
+                // Draw Grid & Axes
+                ctx.strokeStyle = '#eee';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                // Horizontal lines
+                for (let i = 0; i <= 4; i++) {
+                    const y = padding + h - (h * (i / 4));
+                    ctx.moveTo(padding, y);
+                    ctx.lineTo(canvas.width - padding, y);
+                    ctx.fillStyle = '#999';
+                    ctx.fillText(`${i * 25}%`, 5, y + 4);
+                }
+                ctx.stroke();
+
+                // Draw Separators (Vertical Lines)
+                ctx.beginPath();
+                separators.forEach(sep => {
+                    ctx.moveTo(sep.x, padding);
+                    ctx.lineTo(sep.x, canvas.height - padding);
+                });
+                ctx.strokeStyle = '#ddd';
+                ctx.setLineDash([5, 5]);
+                ctx.stroke();
+                ctx.setLineDash([]);
+
+                // Draw Separator Handles & Time Labels
+                separators.forEach(sep => {
+                    // Handle
+                    ctx.fillStyle = '#ccc';
+                    ctx.fillRect(sep.x - 2, canvas.height - padding + 5, 4, 10);
+
+                    // Time Label
+                    ctx.fillStyle = '#666';
+                    ctx.font = '11px monospace';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(sep.label, sep.x, padding - 10); // Top label
+                });
+
+                // Draw Start/End Time Labels
                 ctx.fillStyle = '#666';
                 ctx.font = '11px monospace';
                 ctx.textAlign = 'center';
-                ctx.fillText(sep.label, sep.x, padding - 10); // Top label
-            });
-
-            // Draw Start/End Time Labels
-            ctx.fillStyle = '#666';
-            ctx.font = '11px monospace';
-            ctx.textAlign = 'center';
-            // Start
-            ctx.fillText(startTimeInput, padding, padding - 10);
-            // End
-            const endMins = startTotalMinutes + totalDurationMin;
-            const endH = Math.floor((endMins / 60) % 24);
-            const endM = Math.floor(endMins % 60);
-            ctx.fillText(`${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`, canvas.width - padding, padding - 10);
+                // Start
+                ctx.fillText(startTimeInput, padding, padding - 10);
+                // End
+                const endMins = startTotalMinutes + totalDurationMin;
+                const endH = Math.floor((endMins / 60) % 24);
+                const endM = Math.floor(endMins % 60);
+                ctx.fillText(`${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`, canvas.width - padding, padding - 10);
 
 
-            // Draw Phase Labels
-            graphData.forEach((p, i) => {
-                const x = phaseCenters[i];
-                ctx.fillStyle = '#333';
-                ctx.textAlign = 'center';
-                ctx.font = 'bold 12px sans-serif';
-                ctx.fillText(p.name || `P${i + 1}`, x, canvas.height - 10);
-
-                ctx.fillStyle = '#999';
-                ctx.font = '10px Arial';
-                ctx.fillText(`${Math.round(p.duration * 100)}%`, x, canvas.height - 25);
-                ctx.font = '12px sans-serif'; // Reset font
-            });
-
-            // Helper to draw line
-            const drawLine = (prop, color) => {
-                ctx.beginPath();
-                ctx.strokeStyle = color;
-                ctx.lineWidth = 3;
+                // Draw Phase Labels
                 graphData.forEach((p, i) => {
                     const x = phaseCenters[i];
-                    const y = padding + h - (p[prop] * h);
-                    if (i === 0) ctx.moveTo(x, y);
-                    else ctx.lineTo(x, y);
+                    ctx.fillStyle = '#333';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 12px sans-serif';
+                    ctx.fillText(p.name || `P${i + 1}`, x, canvas.height - 10);
+
+                    ctx.fillStyle = '#999';
+                    ctx.font = '10px Arial';
+                    ctx.fillText(`${Math.round(p.duration * 100)}%`, x, canvas.height - 25);
+                    ctx.font = '12px sans-serif'; // Reset font
                 });
-                ctx.stroke();
 
-                // Draw points
-                graphData.forEach((p, i) => {
-                    const x = phaseCenters[i];
-                    const y = padding + h - (p[prop] * h);
-                    ctx.fillStyle = color;
+                // Helper to draw line
+                const drawLine = (prop, color) => {
                     ctx.beginPath();
-                    ctx.arc(x, y, 6, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.strokeStyle = 'white';
-                    ctx.lineWidth = 2;
+                    ctx.strokeStyle = color;
+                    ctx.lineWidth = 3;
+                    graphData.forEach((p, i) => {
+                        const x = phaseCenters[i];
+                        const y = padding + h - (p[prop] * h);
+                        if (i === 0) ctx.moveTo(x, y);
+                        else ctx.lineTo(x, y);
+                    });
                     ctx.stroke();
-                });
-            };
 
-            drawLine('energy', '#FF5722');
-            drawLine('dance', '#2196F3');
-            drawLine('valence', '#4CAF50');
-            drawLine('tempo', '#FFC107');
-        }
+                    // Draw points
+                    graphData.forEach((p, i) => {
+                        const x = phaseCenters[i];
+                        const y = padding + h - (p[prop] * h);
+                        ctx.fillStyle = color;
+                        ctx.beginPath();
+                        ctx.arc(x, y, 6, 0, Math.PI * 2);
+                        ctx.fill();
+                        ctx.strokeStyle = 'white';
+                        ctx.lineWidth = 2;
+                        ctx.stroke();
+                    });
+                };
 
-        // Interaction Logic
-        canvas.addEventListener('mousedown', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const scaleY = canvas.height / rect.height;
-            const mouseX = (e.clientX - rect.left) * scaleX;
-            const mouseY = (e.clientY - rect.top) * scaleY;
-
-            const padding = 40;
-            const w = canvas.width - padding * 2;
-            const h = canvas.height - padding * 2;
-            const numPhases = graphData.length;
-
-            // 1. Check Separators (Resizing)
-            let currentX = padding;
-            for (let i = 0; i < numPhases - 1; i++) {
-                currentX += graphData[i].duration * w;
-                if (Math.abs(mouseX - currentX) < 10) { // Hit radius 10px
-                    isDragging = true;
-                    dragPoint = { type: 'separator', index: i }; // Index i is between Phase i and i+1
-                    return;
-                }
+                drawLine('energy', '#FF5722');
+                drawLine('dance', '#2196F3');
+                drawLine('valence', '#4CAF50');
+                drawLine('tempo', '#FFC107');
             }
 
-            // 2. Check Points (Values)
-            currentX = padding;
-            const phaseCenters = graphData.map(p => {
-                const center = currentX + (p.duration * w / 2);
-                currentX += p.duration * w;
-                return center;
-            });
+            // Interaction Logic
+            canvas.addEventListener('mousedown', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+                const mouseX = (e.clientX - rect.left) * scaleX;
+                const mouseY = (e.clientY - rect.top) * scaleY;
 
-            const props = ['energy', 'dance', 'valence', 'tempo'];
-            for (let i = 0; i < numPhases; i++) {
-                const x = phaseCenters[i];
-                for (const prop of props) {
-                    const y = padding + h - (graphData[i][prop] * h);
-                    const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
-                    if (dist < 15) {
+                const padding = 40;
+                const w = canvas.width - padding * 2;
+                const h = canvas.height - padding * 2;
+                const numPhases = graphData.length;
+
+                // 1. Check Separators (Resizing)
+                let currentX = padding;
+                for (let i = 0; i < numPhases - 1; i++) {
+                    currentX += graphData[i].duration * w;
+                    if (Math.abs(mouseX - currentX) < 10) { // Hit radius 10px
                         isDragging = true;
-                        dragPoint = { type: 'point', phaseIndex: i, prop: prop };
+                        dragPoint = { type: 'separator', index: i }; // Index i is between Phase i and i+1
                         return;
                     }
                 }
-            }
-        });
 
-        canvas.addEventListener('mousemove', (e) => {
-            const rect = canvas.getBoundingClientRect();
-            const scaleX = canvas.width / rect.width;
-            const mouseX = (e.clientX - rect.left) * scaleX;
+                // 2. Check Points (Values)
+                currentX = padding;
+                const phaseCenters = graphData.map(p => {
+                    const center = currentX + (p.duration * w / 2);
+                    currentX += p.duration * w;
+                    return center;
+                });
 
-            // Cursor hint
-            const padding = 40;
-            const w = canvas.width - padding * 2;
-            let currentX = padding;
-            let hoveringSeparator = false;
-            for (let i = 0; i < graphData.length - 1; i++) {
-                currentX += graphData[i].duration * w;
-                if (Math.abs(mouseX - currentX) < 10) {
-                    hoveringSeparator = true;
-                    break;
-                }
-            }
-            canvas.style.cursor = hoveringSeparator ? 'col-resize' : 'default';
-
-            if (!isDragging || !dragPoint) return;
-
-            const scaleY = canvas.height / rect.height;
-            const mouseY = (e.clientY - rect.top) * scaleY;
-            const h = canvas.height - padding * 2;
-
-            if (dragPoint.type === 'point') {
-                // Update Value
-                let val = 1 - ((mouseY - padding) / h);
-                val = Math.max(0, Math.min(1, val));
-                graphData[dragPoint.phaseIndex][dragPoint.prop] = val;
-            } else if (dragPoint.type === 'separator') {
-                // Update Duration
-                // Dragging separator i affects phase i and i+1
-                const i = dragPoint.index;
-
-                // Calculate current separator X based on previous phases
-                let startX = padding;
-                for (let j = 0; j < i; j++) startX += graphData[j].duration * w;
-
-                // New width for phase i
-                const newWidth = mouseX - startX;
-                let newDur = newWidth / w;
-
-                // Constraints
-                const minDur = 0.05; // 5% minimum
-                const combinedDur = graphData[i].duration + graphData[i + 1].duration;
-
-                if (newDur < minDur) newDur = minDur;
-                if (newDur > combinedDur - minDur) newDur = combinedDur - minDur;
-
-                const delta = newDur - graphData[i].duration;
-                graphData[i].duration = newDur;
-                graphData[i + 1].duration -= delta;
-            }
-
-            drawGraph();
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDragging = false;
-            dragPoint = null; // Reset drag point on mouse up
-            // Re-normalize durations after a drag operation
-            const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
-            if (Math.abs(totalDur - 1.0) > 0.01) {
-                graphData.forEach(p => p.duration = p.duration / totalDur);
-                drawGraph(); // Redraw to reflect normalized durations
-            }
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            isDragging = false;
-            dragPoint = null;
-        });
-
-        function generateFlow() {
-            if (!window.allTracks || window.allTracks.length === 0) {
-                alert("Veuillez d'abord charger un fichier CSV.");
-                return;
-            }
-
-            const targetDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
-            const targetDurationMs = targetDurationMin * 60 * 1000;
-
-            let availableTracks = [...window.allTracks];
-            let finalPlaylist = [];
-
-            const getVal = (obj, key) => {
-                const val = obj[key] || obj[key.toLowerCase()];
-                return parseFloat(val || 0);
-            };
-
-            // Use graphData directly
-            const phases = graphData.map((p, i) => ({
-                id: p.name || `Phase ${i + 1}`, // Use Name
-                durPct: p.duration, // Use dynamic duration
-                targetEnergy: p.energy,
-                targetDance: p.dance,
-                targetValence: p.valence,
-                targetBpm: 60 + (p.tempo * 140) // Map 0-1 to 60-200 BPM
-            }));
-
-            // 2. Generate
-            for (const phase of phases) {
-                const phaseTargetMs = targetDurationMs * phase.durPct;
-                let phaseCurrentMs = 0;
-                const phaseTracks = [];
-
-                while (phaseCurrentMs < phaseTargetMs && availableTracks.length > 0) {
-                    let bestTrackIndex = -1;
-                    let bestScore = Infinity;
-
-                    for (let t = 0; t < availableTracks.length; t++) {
-                        const track = availableTracks[t];
-
-                        const nrg = getVal(track, "Energy");
-                        const dnc = getVal(track, "Danceability");
-                        const val = getVal(track, "Valence");
-                        const bpm = getVal(track, "Tempo");
-
-                        const dist =
-                            Math.pow(nrg - phase.targetEnergy, 2) +
-                            Math.pow(dnc - phase.targetDance, 2) +
-                            Math.pow(val - phase.targetValence, 2) +
-                            Math.pow((bpm - phase.targetBpm) / 200, 2);
-
-                        if (dist < bestScore) {
-                            bestScore = dist;
-                            bestTrackIndex = t;
+                const props = ['energy', 'dance', 'valence', 'tempo'];
+                for (let i = 0; i < numPhases; i++) {
+                    const x = phaseCenters[i];
+                    for (const prop of props) {
+                        const y = padding + h - (graphData[i][prop] * h);
+                        const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+                        if (dist < 15) {
+                            isDragging = true;
+                            dragPoint = { type: 'point', phaseIndex: i, prop: prop };
+                            return;
                         }
                     }
+                }
+            });
 
-                    if (bestTrackIndex !== -1) {
-                        const selectedTrack = availableTracks[bestTrackIndex];
-                        selectedTrack["Phase"] = phase.id; // Use Name directly
-                        phaseTracks.push(selectedTrack);
+            canvas.addEventListener('mousemove', (e) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const mouseX = (e.clientX - rect.left) * scaleX;
 
-                        let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);
-                        if (isNaN(dur)) dur = 240000;
-
-                        phaseCurrentMs += dur;
-                        availableTracks.splice(bestTrackIndex, 1);
-                    } else {
+                // Cursor hint
+                const padding = 40;
+                const w = canvas.width - padding * 2;
+                let currentX = padding;
+                let hoveringSeparator = false;
+                for (let i = 0; i < graphData.length - 1; i++) {
+                    currentX += graphData[i].duration * w;
+                    if (Math.abs(mouseX - currentX) < 10) {
+                        hoveringSeparator = true;
                         break;
                     }
                 }
-                finalPlaylist = finalPlaylist.concat(phaseTracks);
-            }
+                canvas.style.cursor = hoveringSeparator ? 'col-resize' : 'default';
 
-            if (finalPlaylist.length === 0) {
-                alert("⚠️ Aucun titre n'a été sélectionné.\n\nVérifiez que votre fichier CSV contient bien les colonnes 'Energy', 'Danceability', 'Valence' et 'Tempo'.");
-                return;
-            }
+                if (!isDragging || !dragPoint) return;
 
-            displayResults(finalPlaylist);
-            document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
-            alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
-        }
+                const scaleY = canvas.height / rect.height;
+                const mouseY = (e.clientY - rect.top) * scaleY;
+                const h = canvas.height - padding * 2;
 
-        function displayResults(data) {
-            const resultsContainer = document.getElementById('resultsContainer');
-            const table = document.getElementById('tracksTable');
-            const thead = table.querySelector('thead');
-            const tbody = document.getElementById('tracksTableBody');
+                if (dragPoint.type === 'point') {
+                    // Update Value
+                    let val = 1 - ((mouseY - padding) / h);
+                    val = Math.max(0, Math.min(1, val));
+                    graphData[dragPoint.phaseIndex][dragPoint.prop] = val;
+                } else if (dragPoint.type === 'separator') {
+                    // Update Duration
+                    // Dragging separator i affects phase i and i+1
+                    const i = dragPoint.index;
 
-            // Clear existing
-            thead.innerHTML = "";
-            tbody.innerHTML = "";
+                    // Calculate current separator X based on previous phases
+                    let startX = padding;
+                    for (let j = 0; j < i; j++) startX += graphData[j].duration * w;
 
-            if (data.length === 0) return;
+                    // New width for phase i
+                    const newWidth = mouseX - startX;
+                    let newDur = newWidth / w;
 
-            // Get all headers from the first row
-            const headers = Object.keys(data[0]);
+                    // Constraints
+                    const minDur = 0.05; // 5% minimum
+                    const combinedDur = graphData[i].duration + graphData[i + 1].duration;
 
-            // Create Header Row
-            const headerRow = document.createElement('tr');
-            // Add an index column header
-            const thIndex = document.createElement('th');
-            thIndex.textContent = "#";
-            headerRow.appendChild(thIndex);
+                    if (newDur < minDur) newDur = minDur;
+                    if (newDur > combinedDur - minDur) newDur = combinedDur - minDur;
 
-            headers.forEach(header => {
-                const th = document.createElement('th');
-                th.textContent = header;
-                headerRow.appendChild(th);
+                    const delta = newDur - graphData[i].duration;
+                    graphData[i].duration = newDur;
+                    graphData[i + 1].duration -= delta;
+                }
+
+                drawGraph();
             });
-            thead.appendChild(headerRow);
 
-            // Create Data Rows
-            data.forEach((row, index) => {
-                const tr = document.createElement('tr');
+            canvas.addEventListener('mouseup', () => {
+                isDragging = false;
+                dragPoint = null; // Reset drag point on mouse up
+                // Re-normalize durations after a drag operation
+                const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
+                if (Math.abs(totalDur - 1.0) > 0.01) {
+                    graphData.forEach(p => p.duration = p.duration / totalDur);
+                    drawGraph(); // Redraw to reflect normalized durations
+                }
+            });
 
-                // Index cell
-                const tdIndex = document.createElement('td');
-                tdIndex.textContent = index + 1;
-                tr.appendChild(tdIndex);
+            canvas.addEventListener('mouseleave', () => {
+                isDragging = false;
+                dragPoint = null;
+            });
+
+            function generateFlow() {
+                if (!window.allTracks || window.allTracks.length === 0) {
+                    alert("Veuillez d'abord charger un fichier CSV.");
+                    return;
+                }
+
+                const targetDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
+                const targetDurationMs = targetDurationMin * 60 * 1000;
+
+                let availableTracks = [...window.allTracks];
+                let finalPlaylist = [];
+
+                const getVal = (obj, key) => {
+                    const val = obj[key] || obj[key.toLowerCase()];
+                    return parseFloat(val || 0);
+                };
+
+                // Use graphData directly
+                const phases = graphData.map((p, i) => ({
+                    id: p.name || `Phase ${i + 1}`, // Use Name
+                    durPct: p.duration, // Use dynamic duration
+                    targetEnergy: p.energy,
+                    targetDance: p.dance,
+                    targetValence: p.valence,
+                    targetBpm: 60 + (p.tempo * 140) // Map 0-1 to 60-200 BPM
+                }));
+
+                // 2. Generate
+                for (const phase of phases) {
+                    const phaseTargetMs = targetDurationMs * phase.durPct;
+                    let phaseCurrentMs = 0;
+                    const phaseTracks = [];
+
+                    while (phaseCurrentMs < phaseTargetMs && availableTracks.length > 0) {
+                        let bestTrackIndex = -1;
+                        let bestScore = Infinity;
+
+                        for (let t = 0; t < availableTracks.length; t++) {
+                            const track = availableTracks[t];
+
+                            const nrg = getVal(track, "Energy");
+                            const dnc = getVal(track, "Danceability");
+                            const val = getVal(track, "Valence");
+                            const bpm = getVal(track, "Tempo");
+
+                            const dist =
+                                Math.pow(nrg - phase.targetEnergy, 2) +
+                                Math.pow(dnc - phase.targetDance, 2) +
+                                Math.pow(val - phase.targetValence, 2) +
+                                Math.pow((bpm - phase.targetBpm) / 200, 2);
+
+                            if (dist < bestScore) {
+                                bestScore = dist;
+                                bestTrackIndex = t;
+                            }
+                        }
+
+                        if (bestTrackIndex !== -1) {
+                            const selectedTrack = availableTracks[bestTrackIndex];
+                            selectedTrack["Phase"] = phase.id; // Use Name directly
+                            phaseTracks.push(selectedTrack);
+
+                            let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);
+                            if (isNaN(dur)) dur = 240000;
+
+                            phaseCurrentMs += dur;
+                            availableTracks.splice(bestTrackIndex, 1);
+                        } else {
+                            break;
+                        }
+                    }
+                    finalPlaylist = finalPlaylist.concat(phaseTracks);
+                }
+
+                if (finalPlaylist.length === 0) {
+                    alert("⚠️ Aucun titre n'a été sélectionné.\n\nVérifiez que votre fichier CSV contient bien les colonnes 'Energy', 'Danceability', 'Valence' et 'Tempo'.");
+                    return;
+                }
+
+                displayResults(finalPlaylist);
+                document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
+                alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
+            }
+
+            function displayResults(data) {
+                const resultsContainer = document.getElementById('resultsContainer');
+                const table = document.getElementById('tracksTable');
+                const thead = table.querySelector('thead');
+                const tbody = document.getElementById('tracksTableBody');
+
+                // Clear existing
+                thead.innerHTML = "";
+                tbody.innerHTML = "";
+
+                if (data.length === 0) return;
+
+                // Get all headers from the first row
+                const headers = Object.keys(data[0]);
+
+                // Create Header Row
+                const headerRow = document.createElement('tr');
+                // Add an index column header
+                const thIndex = document.createElement('th');
+                thIndex.textContent = "#";
+                headerRow.appendChild(thIndex);
 
                 headers.forEach(header => {
-                    const td = document.createElement('td');
-                    let value = row[header];
-
-                    // Formatting for specific columns
-                    const lowerHeader = header.toLowerCase();
-
-                    // Special handling for Aggregated Genre Fallback
-                    if (header === "Aggregated Genre" && (value === "Unknown" || value === "Other")) {
-                        const artist = row["Artist Name(s)"] || row["Artist"] || "";
-                        const track = row["Track Name"] || row["Name"] || "";
-                        const query = encodeURIComponent(`${artist} ${track} genre`);
-                        td.innerHTML = `${value} <a href="https://www.google.com/search?q=${query}" target="_blank" style="text-decoration:none;">🔍</a>`;
-                    }
-                    else if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
-                        const num = parseFloat(value);
-                        if (!isNaN(num)) value = num.toFixed(3);
-                        td.textContent = value;
-                    } else if (lowerHeader.includes('loudness') || lowerHeader.includes('tempo') || lowerHeader.includes('bpm')) {
-                        const num = parseFloat(value);
-                        if (!isNaN(num)) value = Math.round(num);
-                        td.textContent = value;
-                    } else if (lowerHeader.includes('duration')) {
-                        const ms = parseInt(value);
-                        if (!isNaN(ms)) {
-                            const min = Math.floor(ms / 60000);
-                            const sec = ((ms % 60000) / 1000).toFixed(0).padStart(2, '0');
-                            value = `${min}:${sec}`;
-                        }
-                        td.textContent = value;
-                    } else {
-                        td.textContent = value;
-                    }
-
-                    tr.appendChild(td);
+                    const th = document.createElement('th');
+                    th.textContent = header;
+                    headerRow.appendChild(th);
                 });
-                tbody.appendChild(tr);
-            });
+                thead.appendChild(headerRow);
 
-            resultsContainer.style.display = 'block';
+                // Create Data Rows
+                data.forEach((row, index) => {
+                    const tr = document.createElement('tr');
 
-            // Setup Re-export
-            document.getElementById('exportBtn').onclick = () => {
-                const csv = Papa.unparse(data);
-                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                const url = URL.createObjectURL(blob);
-                const link = document.createElement("a");
-                link.setAttribute("href", url);
-                link.setAttribute("download", "playlist_sorted.csv");
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-        }
-    </script>
+                    // Index cell
+                    const tdIndex = document.createElement('td');
+                    tdIndex.textContent = index + 1;
+                    tr.appendChild(tdIndex);
+
+                    headers.forEach(header => {
+                        const td = document.createElement('td');
+                        let value = row[header];
+
+                        // Formatting for specific columns
+                        const lowerHeader = header.toLowerCase();
+
+                        // Special handling for Aggregated Genre Fallback
+                        if (header === "Aggregated Genre" && (value === "Unknown" || value === "Other")) {
+                            const artist = row["Artist Name(s)"] || row["Artist"] || "";
+                            const track = row["Track Name"] || row["Name"] || "";
+                            const query = encodeURIComponent(`${artist} ${track} genre`);
+                            td.innerHTML = `${value} <a href="https://www.google.com/search?q=${query}" target="_blank" style="text-decoration:none;">🔍</a>`;
+                        }
+                        else if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
+                            const num = parseFloat(value);
+                            if (!isNaN(num)) value = num.toFixed(3);
+                            td.textContent = value;
+                        } else if (lowerHeader.includes('loudness') || lowerHeader.includes('tempo') || lowerHeader.includes('bpm')) {
+                            const num = parseFloat(value);
+                            if (!isNaN(num)) value = Math.round(num);
+                            td.textContent = value;
+                        } else if (lowerHeader.includes('duration')) {
+                            const ms = parseInt(value);
+                            if (!isNaN(ms)) {
+                                const min = Math.floor(ms / 60000);
+                                const sec = ((ms % 60000) / 1000).toFixed(0).padStart(2, '0');
+                                value = `${min}:${sec}`;
+                            }
+                            td.textContent = value;
+                        } else {
+                            td.textContent = value;
+                        }
+
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
+
+                resultsContainer.style.display = 'block';
+
+                // Setup Re-export
+                document.getElementById('exportBtn').onclick = () => {
+                    const csv = Papa.unparse(data);
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "playlist_sorted.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+            }
+        </script>
 </body>
 
 </html>

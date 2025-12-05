@@ -513,52 +513,60 @@
                     // 5. Build Data & Render
                     logDebug("Building table data...");
                     const fullData = itemsToProcess.map((item, index) => {
-                        const t = item.track;
-                        const feat = audioFeaturesMap[t.id] || null;
-                        const albumDetails = albumMap[t.album.id] || {};
+                        try {
+                            if (index % 10 === 0) logDebug(`Processing track ${index + 1}/${itemsToProcess.length}...`);
 
-                        // Resolve Genres (take from first artist)
-                        const mainArtistId = t.artists[0]?.id;
-                        const genres = artistMap[mainArtistId]?.genres?.join(", ") || "";
+                            const t = item.track;
+                            const feat = audioFeaturesMap[t.id] || null;
+                            const albumDetails = albumMap[t.album.id] || {};
 
-                        // Camelot Key
-                        let camelot = "N/A";
-                        if (feat) {
-                            camelot = getCamelotKey(feat.key, feat.mode);
+                            // Resolve Genres (take from first artist)
+                            const mainArtistId = t.artists[0]?.id;
+                            const genres = artistMap[mainArtistId]?.genres?.join(", ") || "";
+
+                            // Camelot Key
+                            let camelot = "N/A";
+                            if (feat) {
+                                camelot = getCamelotKey(feat.key, feat.mode);
+                            }
+
+                            return {
+                                index: index + 1,
+                                uri: t.uri,
+                                name: t.name,
+                                artist: t.artists.map(a => a.name).join(", "),
+                                album: t.album.name,
+                                albumArtist: t.album.artists ? t.album.artists.map(a => a.name).join(", ") : "Unknown",
+                                releaseDate: albumDetails.release_date || t.album.release_date,
+                                label: albumDetails.label || "Unknown",
+                                discNumber: t.disc_number,
+                                trackNumber: t.track_number,
+                                durationMs: t.duration_ms,
+                                explicit: t.explicit,
+                                addedBy: item.added_by ? (item.added_by.id || item.added_by.uri) : "Unknown",
+                                addedAt: item.added_at,
+                                genre: genres,
+                                popularity: t.popularity,
+                                bpm: feat ? Math.round(feat.tempo) : "N/A",
+                                keyCamelot: camelot,
+                                danceability: feat ? feat.danceability : "N/A",
+                                energy: feat ? feat.energy : "N/A",
+                                key: feat ? feat.key : "N/A",
+                                loudness: feat ? feat.loudness : "N/A",
+                                mode: feat ? feat.mode : "N/A",
+                                speechiness: feat ? feat.speechiness : "N/A",
+                                acousticness: feat ? feat.acousticness : "N/A",
+                                instrumentalness: feat ? feat.instrumentalness : "N/A",
+                                liveness: feat ? feat.liveness : "N/A",
+                                valence: feat ? feat.valence : "N/A",
+                                timeSignature: feat ? feat.time_signature : "N/A"
+                            };
+                        } catch (innerErr) {
+                            logDebug(`❌ Error processing track index ${index}: ${innerErr.message}`);
+                            console.error("Track processing error", innerErr, item);
+                            return null; // Handle failed track gracefully
                         }
-
-                        return {
-                            index: index + 1,
-                            uri: t.uri,
-                            name: t.name,
-                            artist: t.artists.map(a => a.name).join(", "),
-                            album: t.album.name,
-                            albumArtist: t.album.artists.map(a => a.name).join(", "),
-                            releaseDate: albumDetails.release_date || t.album.release_date,
-                            label: albumDetails.label || "Unknown",
-                            discNumber: t.disc_number,
-                            trackNumber: t.track_number,
-                            durationMs: t.duration_ms,
-                            explicit: t.explicit,
-                            addedBy: item.added_by ? (item.added_by.id || item.added_by.uri) : "Unknown",
-                            addedAt: item.added_at,
-                            genre: genres,
-                            popularity: t.popularity,
-                            bpm: feat ? Math.round(feat.tempo) : "N/A",
-                            keyCamelot: camelot,
-                            danceability: feat ? feat.danceability : "N/A",
-                            energy: feat ? feat.energy : "N/A",
-                            key: feat ? feat.key : "N/A",
-                            loudness: feat ? feat.loudness : "N/A",
-                            mode: feat ? feat.mode : "N/A",
-                            speechiness: feat ? feat.speechiness : "N/A",
-                            acousticness: feat ? feat.acousticness : "N/A",
-                            instrumentalness: feat ? feat.instrumentalness : "N/A",
-                            liveness: feat ? feat.liveness : "N/A",
-                            valence: feat ? feat.valence : "N/A",
-                            timeSignature: feat ? feat.time_signature : "N/A"
-                        };
-                    });
+                    }).filter(item => item !== null); // Remove failed items
 
                     // Render Table
                     // Columns: All requested columns
@@ -635,6 +643,8 @@
 
                 } catch (err) {
                     console.error(err);
+                    logDebug(`❌ CRITICAL ERROR: ${err.message}`);
+                    logDebug(err.stack);
                     statusEl.textContent = "❌ Erreur : " + err.message;
                     statusEl.style.color = "red";
                 }

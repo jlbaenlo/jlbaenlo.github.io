@@ -142,8 +142,8 @@
 <body>
 
     <div class="container">
-        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(Graph
-                v2)</span></h1>
+        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v4 -
+                Dynamic)</span></h1>
         <p style="text-align: center;">Analysez et triez vos playlists via Exportify</p>
 
         <div class="step">
@@ -340,15 +340,17 @@
             const mode = document.getElementById('flowMode').value;
             graphData = [];
 
+            const defaultDur = 1 / numPhases;
+
             if (mode === 'party') {
                 // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
                 if (numPhases === 5) {
                     graphData = [
-                        { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35 }, // Warm-up
-                        { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45 }, // Build
-                        { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55 }, // Peak
-                        { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5 }, // Sustain
-                        { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35 }  // Cool Down
+                        { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 }, // Warm-up (15%)
+                        { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 }, // Build (25%)
+                        { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 }, // Peak (20%)
+                        { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 }, // Sustain (25%)
+                        { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }  // Cool Down (15%)
                     ];
                 } else {
                     // Generic Build-Up for Party
@@ -359,7 +361,8 @@
                             energy: intensity,
                             dance: Math.min(1, intensity + 0.1),
                             valence: 0.5 + (intensity * 0.3),
-                            tempo: 0.3 + (intensity * 0.3)
+                            tempo: 0.3 + (intensity * 0.3),
+                            duration: defaultDur
                         });
                     }
                 }
@@ -372,7 +375,8 @@
                         energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
                         dance: 0.4 + wave,        // Moderate Dance (groove)
                         valence: 0.7,             // High Valence (Happy/Chill)
-                        tempo: 0.3 + (wave * 0.5) // Low Tempo (~100 BPM)
+                        tempo: 0.3 + (wave * 0.5), // Low Tempo (~100 BPM)
+                        duration: defaultDur
                     });
                 }
             }
@@ -380,10 +384,16 @@
             // Fallback if length mismatch (e.g. switching numPhases manually)
             // We ensure graphData matches numPhases
             while (graphData.length < numPhases) {
-                graphData.push({ energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5 });
+                graphData.push({ energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
             }
             while (graphData.length > numPhases) {
                 graphData.pop();
+            }
+
+            // Normalize durations to ensure sum is 1.0
+            const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
+            if (Math.abs(totalDur - 1.0) > 0.01) {
+                graphData.forEach(p => p.duration = p.duration / totalDur);
             }
 
             drawGraph();
@@ -397,7 +407,20 @@
             const w = canvas.width - padding * 2;
             const h = canvas.height - padding * 2;
             const numPhases = graphData.length;
-            const stepX = w / (numPhases - 1);
+
+            // Calculate X positions for each phase (center) and separators
+            let currentX = padding;
+            const phaseCenters = [];
+            const separators = []; // x positions
+
+            graphData.forEach((p, i) => {
+                const phaseWidth = p.duration * w;
+                phaseCenters.push(currentX + (phaseWidth / 2));
+                currentX += phaseWidth;
+                if (i < numPhases - 1) {
+                    separators.push(currentX);
+                }
+            });
 
             // Draw Grid & Axes
             ctx.strokeStyle = '#eee';
@@ -411,15 +434,36 @@
                 ctx.fillStyle = '#999';
                 ctx.fillText(`${i * 25}%`, 5, y + 4);
             }
-            // Vertical lines (Phases)
-            for (let i = 0; i < numPhases; i++) {
-                const x = padding + (i * stepX);
+            ctx.stroke();
+
+            // Draw Separators (Vertical Lines)
+            ctx.beginPath();
+            separators.forEach(x => {
                 ctx.moveTo(x, padding);
                 ctx.lineTo(x, canvas.height - padding);
-                ctx.fillStyle = '#333';
-                ctx.fillText(`Phase ${i + 1}`, x - 20, canvas.height - 10);
-            }
+            });
+            ctx.strokeStyle = '#ddd';
+            ctx.setLineDash([5, 5]);
             ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Draw Separator Handles (for interaction hint)
+            separators.forEach(x => {
+                ctx.fillStyle = '#ccc';
+                ctx.fillRect(x - 2, canvas.height - padding + 5, 4, 10);
+            });
+
+            // Draw Phase Labels
+            graphData.forEach((p, i) => {
+                const x = phaseCenters[i];
+                ctx.fillStyle = '#333';
+                ctx.textAlign = 'center';
+                ctx.fillText(`P${i + 1}`, x, canvas.height - 10);
+                ctx.fillStyle = '#999';
+                ctx.font = '10px Arial';
+                ctx.fillText(`${Math.round(p.duration * 100)}%`, x, canvas.height - 25);
+                ctx.font = '12px sans-serif'; // Reset font
+            });
 
             // Helper to draw line
             const drawLine = (prop, color) => {
@@ -427,7 +471,7 @@
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 3;
                 graphData.forEach((p, i) => {
-                    const x = padding + (i * stepX);
+                    const x = phaseCenters[i];
                     const y = padding + h - (p[prop] * h);
                     if (i === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
@@ -436,13 +480,12 @@
 
                 // Draw points
                 graphData.forEach((p, i) => {
-                    const x = padding + (i * stepX);
+                    const x = phaseCenters[i];
                     const y = padding + h - (p[prop] * h);
                     ctx.fillStyle = color;
                     ctx.beginPath();
                     ctx.arc(x, y, 6, 0, Math.PI * 2);
                     ctx.fill();
-                    // Border for better visibility
                     ctx.strokeStyle = 'white';
                     ctx.lineWidth = 2;
                     ctx.stroke();
@@ -458,7 +501,6 @@
         // Interaction Logic
         canvas.addEventListener('mousedown', (e) => {
             const rect = canvas.getBoundingClientRect();
-            // Scale mouse coordinates to canvas resolution
             const scaleX = canvas.width / rect.width;
             const scaleY = canvas.height / rect.height;
             const mouseX = (e.clientX - rect.left) * scaleX;
@@ -468,21 +510,35 @@
             const w = canvas.width - padding * 2;
             const h = canvas.height - padding * 2;
             const numPhases = graphData.length;
-            const stepX = w / (numPhases - 1);
 
-            // Check collision with points
+            // 1. Check Separators (Resizing)
+            let currentX = padding;
+            for (let i = 0; i < numPhases - 1; i++) {
+                currentX += graphData[i].duration * w;
+                if (Math.abs(mouseX - currentX) < 10) { // Hit radius 10px
+                    isDragging = true;
+                    dragPoint = { type: 'separator', index: i }; // Index i is between Phase i and i+1
+                    return;
+                }
+            }
+
+            // 2. Check Points (Values)
+            currentX = padding;
+            const phaseCenters = graphData.map(p => {
+                const center = currentX + (p.duration * w / 2);
+                currentX += p.duration * w;
+                return center;
+            });
+
             const props = ['energy', 'dance', 'valence', 'tempo'];
-
             for (let i = 0; i < numPhases; i++) {
-                const x = padding + (i * stepX);
-
+                const x = phaseCenters[i];
                 for (const prop of props) {
                     const y = padding + h - (graphData[i][prop] * h);
                     const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
-
-                    if (dist < 15) { // Hit radius
+                    if (dist < 15) {
                         isDragging = true;
-                        dragPoint = { phaseIndex: i, type: prop };
+                        dragPoint = { type: 'point', phaseIndex: i, prop: prop };
                         return;
                     }
                 }
@@ -490,27 +546,72 @@
         });
 
         canvas.addEventListener('mousemove', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+
+            // Cursor hint
+            const padding = 40;
+            const w = canvas.width - padding * 2;
+            let currentX = padding;
+            let hoveringSeparator = false;
+            for (let i = 0; i < graphData.length - 1; i++) {
+                currentX += graphData[i].duration * w;
+                if (Math.abs(mouseX - currentX) < 10) {
+                    hoveringSeparator = true;
+                    break;
+                }
+            }
+            canvas.style.cursor = hoveringSeparator ? 'col-resize' : 'default';
+
             if (!isDragging || !dragPoint) return;
 
-            const rect = canvas.getBoundingClientRect();
             const scaleY = canvas.height / rect.height;
             const mouseY = (e.clientY - rect.top) * scaleY;
-
-            const padding = 40;
             const h = canvas.height - padding * 2;
 
-            // Calculate new value (0-1)
-            let val = 1 - ((mouseY - padding) / h);
-            // Clamp
-            val = Math.max(0, Math.min(1, val));
+            if (dragPoint.type === 'point') {
+                // Update Value
+                let val = 1 - ((mouseY - padding) / h);
+                val = Math.max(0, Math.min(1, val));
+                graphData[dragPoint.phaseIndex][dragPoint.prop] = val;
+            } else if (dragPoint.type === 'separator') {
+                // Update Duration
+                // Dragging separator i affects phase i and i+1
+                const i = dragPoint.index;
 
-            graphData[dragPoint.phaseIndex][dragPoint.type] = val;
+                // Calculate current separator X based on previous phases
+                let startX = padding;
+                for (let j = 0; j < i; j++) startX += graphData[j].duration * w;
+
+                // New width for phase i
+                const newWidth = mouseX - startX;
+                let newDur = newWidth / w;
+
+                // Constraints
+                const minDur = 0.05; // 5% minimum
+                const combinedDur = graphData[i].duration + graphData[i + 1].duration;
+
+                if (newDur < minDur) newDur = minDur;
+                if (newDur > combinedDur - minDur) newDur = combinedDur - minDur;
+
+                const delta = newDur - graphData[i].duration;
+                graphData[i].duration = newDur;
+                graphData[i + 1].duration -= delta;
+            }
+
             drawGraph();
         });
 
         canvas.addEventListener('mouseup', () => {
             isDragging = false;
-            dragPoint = null;
+            dragPoint = null; // Reset drag point on mouse up
+            // Re-normalize durations after a drag operation
+            const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
+            if (Math.abs(totalDur - 1.0) > 0.01) {
+                graphData.forEach(p => p.duration = p.duration / totalDur);
+                drawGraph(); // Redraw to reflect normalized durations
+            }
         });
 
         canvas.addEventListener('mouseleave', () => {
@@ -538,7 +639,7 @@
             // Use graphData directly
             const phases = graphData.map((p, i) => ({
                 id: i + 1,
-                durPct: 1 / graphData.length, // Equal duration for now (simplification)
+                durPct: p.duration, // Use dynamic duration
                 targetEnergy: p.energy,
                 targetDance: p.dance,
                 targetValence: p.valence,

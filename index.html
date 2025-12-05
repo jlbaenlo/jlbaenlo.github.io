@@ -175,6 +175,23 @@
             return m === 1 ? majorMap[k] : minorMap[k];
         }
 
+        function getAggregatedGenre(genreString) {
+            if (!genreString) return "Unknown";
+            const g = genreString.toLowerCase();
+
+            if (g.match(/hip hop|rap|trap|drill|grime/)) return "Hip Hop / Rap";
+            if (g.match(/house|techno|edm|dance|electronic|trance|dubstep|disco/)) return "Electronic / Dance";
+            if (g.match(/rock|metal|punk|indie|grunge|alternative/)) return "Rock / Indie";
+            if (g.match(/pop|r&b|soul|funk/)) return "Pop / R&B";
+            if (g.match(/jazz|blues/)) return "Jazz / Blues";
+            if (g.match(/classical|score|soundtrack|orchestral/)) return "Classical / Cinematic";
+            if (g.match(/reggae|dancehall/)) return "Reggae / Dancehall";
+            if (g.match(/latin|reggaeton|salsa/)) return "Latin";
+            if (g.match(/folk|acoustic|singer-songwriter/)) return "Folk / Acoustic";
+
+            return "Other";
+        }
+
         document.getElementById('csvFileInput').addEventListener('change', function (e) {
             const file = e.target.files[0];
             if (!file) return;
@@ -194,7 +211,7 @@
                         return;
                     }
 
-                    const data = results.data;
+                    let data = results.data;
                     console.log("Parsed Data:", data);
 
                     if (data.length === 0) {
@@ -202,6 +219,19 @@
                         statusEl.className = "error";
                         return;
                     }
+
+                    // Process Data: Add Aggregated Genre
+                    data = data.map(row => {
+                        const rawGenre = row["Genres"] || "";
+                        const aggGenre = getAggregatedGenre(rawGenre);
+
+                        // Create a new object to control order (put Aggregated Genre near Genres)
+                        // We copy all existing props, then overwrite/add
+                        return {
+                            ...row,
+                            "Aggregated Genre": aggGenre
+                        };
+                    });
 
                     displayResults(data);
                     statusEl.textContent = `✅ ${data.length} morceaux chargés !`;

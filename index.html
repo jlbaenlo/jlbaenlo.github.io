@@ -142,8 +142,8 @@
 <body>
 
     <div class="container">
-        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v5 - Time
-                Axis)</span></h1>
+        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v6 - Final
+                UI)</span></h1>
         <p style="text-align: center;">Analysez et triez vos playlists via Exportify</p>
 
         <div class="step">
@@ -472,7 +472,17 @@
                 const startTimeInput = document.getElementById('startTime').value || "21:00";
                 const [startH, startM] = startTimeInput.split(':').map(Number);
                 const startTotalMinutes = startH * 60 + startM;
-                const totalDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
+
+                // Use the calculated duration from our global function/state if possible, 
+                // or re-calculate it here to be safe.
+                // We can read the text content of calculatedDuration or just re-run the logic.
+                // Let's re-run logic for safety.
+                const endTimeInput = document.getElementById('endTime').value || "22:00";
+                const [endH, endM] = endTimeInput.split(':').map(Number);
+                let sMin = startH * 60 + startM;
+                let eMin = endH * 60 + endM;
+                if (eMin < sMin) eMin += 24 * 60;
+                const totalDurationMin = eMin - sMin;
 
                 // Calculate X positions for each phase (center) and separators
                 let currentX = padding;
@@ -717,86 +727,6 @@
             });
 
             function generateFlow() {
-                if (!window.allTracks || window.allTracks.length === 0) {
-                    alert("Veuillez d'abord charger un fichier CSV.");
-                    return;
-                }
-
-                const targetDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
-                const targetDurationMs = targetDurationMin * 60 * 1000;
-
-                let availableTracks = [...window.allTracks];
-                let finalPlaylist = [];
-
-                const getVal = (obj, key) => {
-                    const val = obj[key] || obj[key.toLowerCase()];
-                    return parseFloat(val || 0);
-                };
-
-                // Use graphData directly
-                const phases = graphData.map((p, i) => ({
-                    id: p.name || `Phase ${i + 1}`, // Use Name
-                    durPct: p.duration, // Use dynamic duration
-                    targetEnergy: p.energy,
-                    targetDance: p.dance,
-                    targetValence: p.valence,
-                    targetBpm: 60 + (p.tempo * 140) // Map 0-1 to 60-200 BPM
-                }));
-
-                // 2. Generate
-                for (const phase of phases) {
-                    const phaseTargetMs = targetDurationMs * phase.durPct;
-                    let phaseCurrentMs = 0;
-                    const phaseTracks = [];
-
-                    while (phaseCurrentMs < phaseTargetMs && availableTracks.length > 0) {
-                        let bestTrackIndex = -1;
-                        let bestScore = Infinity;
-
-                        for (let t = 0; t < availableTracks.length; t++) {
-                            const track = availableTracks[t];
-
-                            const nrg = getVal(track, "Energy");
-                            const dnc = getVal(track, "Danceability");
-                            const val = getVal(track, "Valence");
-                            const bpm = getVal(track, "Tempo");
-
-                            const dist =
-                                Math.pow(nrg - phase.targetEnergy, 2) +
-                                Math.pow(dnc - phase.targetDance, 2) +
-                                Math.pow(val - phase.targetValence, 2) +
-                                Math.pow((bpm - phase.targetBpm) / 200, 2);
-
-                            if (dist < bestScore) {
-                                bestScore = dist;
-                                bestTrackIndex = t;
-                            }
-                        }
-
-                        if (bestTrackIndex !== -1) {
-                            const selectedTrack = availableTracks[bestTrackIndex];
-                            selectedTrack["Phase"] = phase.id; // Use Name directly
-                            phaseTracks.push(selectedTrack);
-
-                            let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);
-                            if (isNaN(dur)) dur = 240000;
-
-                            phaseCurrentMs += dur;
-                            availableTracks.splice(bestTrackIndex, 1);
-                        } else {
-                            break;
-                        }
-                    }
-                    finalPlaylist = finalPlaylist.concat(phaseTracks);
-                }
-
-                if (finalPlaylist.length === 0) {
-                    alert("⚠️ Aucun titre n'a été sélectionné.\n\nVérifiez que votre fichier CSV contient bien les colonnes 'Energy', 'Danceability', 'Valence' et 'Tempo'.");
-                    return;
-                }
-
-                displayResults(finalPlaylist);
-                document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
                 alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
             }
 
@@ -848,50 +778,21 @@
                         // Special handling for Aggregated Genre Fallback
                         if (header === "Aggregated Genre" && (value === "Unknown" || value === "Other")) {
                             const artist = row["Artist Name(s)"] || row["Artist"] || "";
-                            const track = row["Track Name"] || row["Name"] || "";
-                            const query = encodeURIComponent(`${artist} ${track} genre`);
-                            td.innerHTML = `${value} <a href="https://www.google.com/search?q=${query}" target="_blank" style="text-decoration:none;">🔍</a>`;
+                            resultsContainer.style.display = 'block';
+
+                            // Setup Re-export
+                            document.getElementById('exportBtn').onclick = () => {
+                                const csv = Papa.unparse(data);
+                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                const url = URL.createObjectURL(blob);
+                                const link = document.createElement("a");
+                                link.setAttribute("href", url);
+                                link.setAttribute("download", "playlist_sorted.csv");
+                                document.body.appendChild(link);
+                                link.click();
+                                document.body.removeChild(link);
+                            };
                         }
-                        else if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
-                            const num = parseFloat(value);
-                            if (!isNaN(num)) value = num.toFixed(3);
-                            td.textContent = value;
-                        } else if (lowerHeader.includes('loudness') || lowerHeader.includes('tempo') || lowerHeader.includes('bpm')) {
-                            const num = parseFloat(value);
-                            if (!isNaN(num)) value = Math.round(num);
-                            td.textContent = value;
-                        } else if (lowerHeader.includes('duration')) {
-                            const ms = parseInt(value);
-                            if (!isNaN(ms)) {
-                                const min = Math.floor(ms / 60000);
-                                const sec = ((ms % 60000) / 1000).toFixed(0).padStart(2, '0');
-                                value = `${min}:${sec}`;
-                            }
-                            td.textContent = value;
-                        } else {
-                            td.textContent = value;
-                        }
-
-                        tr.appendChild(td);
-                    });
-                    tbody.appendChild(tr);
-                });
-
-                resultsContainer.style.display = 'block';
-
-                // Setup Re-export
-                document.getElementById('exportBtn').onclick = () => {
-                    const csv = Papa.unparse(data);
-                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                    const url = URL.createObjectURL(blob);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", url);
-                    link.setAttribute("download", "playlist_sorted.csv");
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                };
-            }
         </script>
 </body>
 

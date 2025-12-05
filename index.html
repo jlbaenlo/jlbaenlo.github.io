@@ -339,44 +339,45 @@
                     complete: function (results) {
                         if (results.errors.length > 0) {
                             console.error("CSV Errors:", results.errors);
-                            let data = results.data;
-                            console.log("Parsed Data:", data);
-
-                            if (data.length === 0) {
-                                statusEl.textContent = "⚠️ Le fichier semble vide.";
-                                statusEl.className = "error";
-                                return;
-                            }
-
-                            // Process Data: Add Aggregated Genre
-                            data = data.map(row => {
-                                const rawGenre = row["Genres"] || "";
-                                const aggGenre = getAggregatedGenre(rawGenre);
-
-                                // Create a new object to control order (put Aggregated Genre FIRST)
-                                return {
-                                    "Aggregated Genre": aggGenre,
-                                    ...row
-                                };
-                            });
-
-                            // Store global data for the algorithm
-                            window.allTracks = data;
-
-                            displayResults(data);
-                            statusEl.textContent = `✅ ${data.length} morceaux chargés !`;
-                            statusEl.className = "success";
-
-                            // Show Phase Config
-                            document.getElementById('phaseConfigStep').style.display = 'block';
-                            initGraph(); // Initialize Graph
-                        },
-                        error: function (err) {
-                            console.error("PapaParse Error:", err);
-                            statusEl.textContent = "❌ Erreur critique de parsing.";
-                            statusEl.className = "error";
                         }
-                    });
+                        let data = results.data;
+                        console.log("Parsed Data:", data);
+
+                        if (data.length === 0) {
+                            importStatsEl.textContent = "⚠️ Le fichier semble vide.";
+                            importStatsEl.className = "error";
+                            return;
+                        }
+
+                        // Process Data: Add Aggregated Genre
+                        data = data.map(row => {
+                            const rawGenre = row["Genres"] || "";
+                            const aggGenre = getAggregatedGenre(rawGenre);
+
+                            // Create a new object to control order (put Aggregated Genre FIRST)
+                            return {
+                                "Aggregated Genre": aggGenre,
+                                ...row
+                            };
+                        });
+
+                        // Store global data for the algorithm
+                        window.allTracks = data;
+
+                        displayResults(data);
+                        importStatsEl.textContent = `✅ ${data.length} morceaux chargés !`;
+                        importStatsEl.className = "success";
+
+                        // Show Phase Config
+                        document.getElementById('phaseConfigStep').style.display = 'block';
+                        initGraph(); // Initialize Graph
+                    }, // Close complete function properly
+                    error: function (err) {
+                        console.error("PapaParse Error:", err);
+                        importStatsEl.textContent = "❌ Erreur critique de parsing.";
+                        importStatsEl.className = "error";
+                    }
+                });
             });
 
             // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---

@@ -242,6 +242,18 @@
         </div>
 
         <script>
+            // GLOBAL ERROR HANDLER
+            window.onerror = function (msg, url, line, col, error) {
+                const banner = document.createElement('div');
+                banner.innerText = `🔥 ERROR: ${msg}\nLine: ${line}:${col}`;
+                banner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:red;color:white;z-index:99999;padding:20px;font-weight:bold;white-space:pre-wrap;';
+                document.body.appendChild(banner);
+                console.error("Global Error:", error);
+                return false;
+            };
+            console.log("Script Global Error Handler Installed");
+
+            // Script start
             // Camelot Helper
             function getCamelotKey(key, mode) {
                 // Exportify usually gives Key as integer (0-11) and Mode as integer (0 or 1)
@@ -326,6 +338,7 @@
             document.getElementById('csvFile').addEventListener('change', handleFileSelect, false);
 
             function handleFileSelect(evt) {
+                showDebugBanner("FILE SELECTED - PARSING...", "orange");
                 const file = evt.target.files[0];
                 if (!file) return;
 
@@ -724,16 +737,16 @@
                 drawGraph();
             });
 
-            canvas.addEventListener('mouseup', () => {
-                isDragging = false;
-                dragPoint = null; // Reset drag point on mouse up
-                // Re-normalize durations after a drag operation
-                const totalDur = graphData.reduce((sum, p) => sum + (p.duration || 0), 0);
-                if (Math.abs(totalDur - 1.0) > 0.01) {
-                    graphData.forEach(p => p.duration = p.duration / totalDur);
-                    drawGraph(); // Redraw to reflect normalized durations
-                }
-            });
+            // Visual Debug Helper
+            function showDebugBanner(msg, color = 'green') {
+                const banner = document.createElement('div');
+                banner.textContent = msg;
+                banner.style.cssText = `position:fixed;top:0;left:0;width:100%;background:${color};color:white;text-align:center;padding:10px;z-index:10000;font-weight:bold;font-size:18px;`;
+                document.body.appendChild(banner);
+                setTimeout(() => banner.remove(), 5000);
+            }
+
+            showDebugBanner("SCRIPT READY (V8 - FIXED)", "blue");
 
             canvas.addEventListener('mouseleave', () => {
                 isDragging = false;

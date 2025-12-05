@@ -225,11 +225,10 @@
                         const rawGenre = row["Genres"] || "";
                         const aggGenre = getAggregatedGenre(rawGenre);
 
-                        // Create a new object to control order (put Aggregated Genre near Genres)
-                        // We copy all existing props, then overwrite/add
+                        // Create a new object to control order (put Aggregated Genre FIRST)
                         return {
-                            ...row,
-                            "Aggregated Genre": aggGenre
+                            "Aggregated Genre": aggGenre,
+                            ...row
                         };
                     });
 
@@ -289,12 +288,22 @@
 
                     // Formatting for specific columns
                     const lowerHeader = header.toLowerCase();
-                    if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
+
+                    // Special handling for Aggregated Genre Fallback
+                    if (header === "Aggregated Genre" && (value === "Unknown" || value === "Other")) {
+                        const artist = row["Artist Name(s)"] || row["Artist"] || "";
+                        const track = row["Track Name"] || row["Name"] || "";
+                        const query = encodeURIComponent(`${artist} ${track} genre`);
+                        td.innerHTML = `${value} <a href="https://www.google.com/search?q=${query}" target="_blank" style="text-decoration:none;">🔍</a>`;
+                    }
+                    else if (['danceability', 'energy', 'valence', 'acousticness', 'instrumentalness', 'speechiness', 'liveness'].some(h => lowerHeader.includes(h))) {
                         const num = parseFloat(value);
                         if (!isNaN(num)) value = num.toFixed(3);
+                        td.textContent = value;
                     } else if (lowerHeader.includes('loudness') || lowerHeader.includes('tempo') || lowerHeader.includes('bpm')) {
                         const num = parseFloat(value);
                         if (!isNaN(num)) value = Math.round(num);
+                        td.textContent = value;
                     } else if (lowerHeader.includes('duration')) {
                         const ms = parseInt(value);
                         if (!isNaN(ms)) {
@@ -302,9 +311,11 @@
                             const sec = ((ms % 60000) / 1000).toFixed(0).padStart(2, '0');
                             value = `${min}:${sec}`;
                         }
+                        td.textContent = value;
+                    } else {
+                        td.textContent = value;
                     }
 
-                    td.textContent = value;
                     tr.appendChild(td);
                 });
                 tbody.appendChild(tr);

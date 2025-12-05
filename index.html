@@ -377,7 +377,7 @@
                             statusEl.className = "error";
                         }
                     });
-            });
+            }
 
             // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---
 
@@ -553,9 +553,9 @@
                 ctx.fillText(startTimeInput, padding, padding - 10);
                 // End
                 const endMins = startTotalMinutes + totalDurationMin;
-                const endH = Math.floor((endMins / 60) % 24);
-                const endM = Math.floor(endMins % 60);
-                ctx.fillText(`${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`, canvas.width - padding, padding - 10);
+                const finalEndH = Math.floor((endMins / 60) % 24);
+                const finalEndM = Math.floor(endMins % 60);
+                ctx.fillText(`${finalEndH.toString().padStart(2, '0')}:${finalEndM.toString().padStart(2, '0')}`, canvas.width - padding, padding - 10);
 
 
                 // Draw Phase Labels
@@ -775,24 +775,117 @@
                         // Formatting for specific columns
                         const lowerHeader = header.toLowerCase();
 
-                        // Special handling for Aggregated Genre Fallback
-                        if (header === "Aggregated Genre" && (value === "Unknown" || value === "Other")) {
-                            const artist = row["Artist Name(s)"] || row["Artist"] || "";
-                            resultsContainer.style.display = 'block';
+                        td.textContent = value;
+                        tr.appendChild(td);
+                    });
+                    tbody.appendChild(tr);
+                });
 
-                            // Setup Re-export
-                            document.getElementById('exportBtn').onclick = () => {
-                                const csv = Papa.unparse(data);
-                                const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-                                const url = URL.createObjectURL(blob);
-                                const link = document.createElement("a");
-                                link.setAttribute("href", url);
-                                link.setAttribute("download", "playlist_sorted.csv");
-                                document.body.appendChild(link);
-                                link.click();
-                                document.body.removeChild(link);
-                            };
+                resultsContainer.style.display = 'block';
+
+                // Setup Re-export
+                document.getElementById('exportBtn').onclick = () => {
+                    const csv = Papa.unparse(data);
+                    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                    const url = URL.createObjectURL(blob);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", url);
+                    link.setAttribute("download", "playlist_sorted.csv");
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                };
+            }
+        </script>
+        <canvas id="backgroundCanvas"></canvas>
+        <style>
+            #backgroundCanvas {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                z-index: -1;
+                pointer-events: none;
+            }
+        </style>
+        <script>
+            (function () {
+                const canvas = document.getElementById('backgroundCanvas');
+                const ctx = canvas.getContext('2d');
+                let width, height;
+                let particles = [];
+
+                function resize() {
+                    width = canvas.width = window.innerWidth;
+                    height = canvas.height = window.innerHeight;
+                    initParticles();
+                }
+
+                function initParticles() {
+                    particles = [];
+                    const numParticles = Math.floor((width * height) / 15000); // Density
+                    for (let i = 0; i < numParticles; i++) {
+                        particles.push({
+                            x: Math.random() * width,
+                            y: Math.random() * height,
+                            vx: (Math.random() - 0.5) * 0.5,
+                            vy: (Math.random() - 0.5) * 0.5,
+                            size: Math.random() * 3 + 1,
+                            color: `rgba(${Math.random() > 0.5 ? '29, 185, 84' : '33, 150, 243'}, ${Math.random() * 0.3 + 0.1})` // Spotify Green or Blue
+                        });
+                    }
+                }
+
+                function animate() {
+                    ctx.clearRect(0, 0, width, height);
+
+                    // Gradient Background
+                    const gradient = ctx.createLinearGradient(0, 0, width, height);
+                    gradient.addColorStop(0, '#f5f5f5');
+                    gradient.addColorStop(1, '#e0e0e0');
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(0, 0, width, height);
+
+                    particles.forEach(p => {
+                        p.x += p.vx;
+                        p.y += p.vy;
+
+                        if (p.x < 0) p.x = width;
+                        if (p.x > width) p.x = 0;
+                        if (p.y < 0) p.y = height;
+                        if (p.y > height) p.y = 0;
+
+                        ctx.beginPath();
+                        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+                        ctx.fillStyle = p.color;
+                        ctx.fill();
+                    });
+
+                    // Connect particles
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.05)';
+                    ctx.lineWidth = 0.5;
+                    for (let i = 0; i < particles.length; i++) {
+                        for (let j = i + 1; j < particles.length; j++) {
+                            const dx = particles[i].x - particles[j].x;
+                            const dy = particles[i].y - particles[j].y;
+                            const dist = Math.sqrt(dx * dx + dy * dy);
+                            if (dist < 100) {
+                                ctx.beginPath();
+                                ctx.moveTo(particles[i].x, particles[i].y);
+                                ctx.lineTo(particles[j].x, particles[j].y);
+                                ctx.stroke();
+                            }
                         }
+                    }
+
+                    requestAnimationFrame(animate);
+                }
+
+                window.addEventListener('resize', resize);
+                resize();
+                animate();
+            })();
         </script>
 </body>
 

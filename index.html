@@ -305,7 +305,7 @@
 
                     // Show Phase Config
                     document.getElementById('phaseConfigStep').style.display = 'block';
-                    renderPhaseInputs(); // Render initial phase inputs
+                    initGraph(); // Initialize Graph
                 },
                 error: function (err) {
                     console.error("PapaParse Error:", err);
@@ -315,44 +315,162 @@
             });
         });
 
-        // --- PHASE ALGORITHM UI & LOGIC ---
+        // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---
 
-        document.getElementById('numPhases').addEventListener('change', renderPhaseInputs);
+        let graphData = [];
+        const canvas = document.getElementById('flowGraph');
+        const ctx = canvas.getContext('2d');
+        let isDragging = false;
+        let dragPoint = null; // { phaseIndex, type }
 
-        function renderPhaseInputs() {
-            const container = document.getElementById('phasesContainer');
-            container.innerHTML = "";
-            const numPhases = parseInt(document.getElementById('numPhases').value) || 3;
+        // Initialize Graph Data
+        document.getElementById('numPhases').addEventListener('change', initGraph);
 
-            for (let i = 1; i <= numPhases; i++) {
-                const div = document.createElement('div');
-                div.className = "phase-box";
-                div.innerHTML = `
-                    <h4>Phase ${i}</h4>
-                    <div class="control-group">
-                        <label>Durée (% du total): <span id="p${i}-dur-val">20</span>%</label>
-                        <input type="range" id="p${i}-dur" min="5" max="100" value="${Math.floor(100 / numPhases)}" oninput="document.getElementById('p${i}-dur-val').textContent=this.value">
-                    </div>
-                    <div class="control-group">
-                        <label>Energy (%): <span id="p${i}-nrg-val">50</span>%</label>
-                        <input type="range" id="p${i}-nrg" min="0" max="100" value="50" oninput="document.getElementById('p${i}-nrg-val').textContent=this.value">
-                    </div>
-                    <div class="control-group">
-                        <label>Danceability (%): <span id="p${i}-dnc-val">50</span>%</label>
-                        <input type="range" id="p${i}-dnc" min="0" max="100" value="50" oninput="document.getElementById('p${i}-dnc-val').textContent=this.value">
-                    </div>
-                    <div class="control-group">
-                        <label>Valence (%): <span id="p${i}-val-val">50</span>%</label>
-                        <input type="range" id="p${i}-val" min="0" max="100" value="50" oninput="document.getElementById('p${i}-val-val').textContent=this.value">
-                    </div>
-                    <div class="control-group">
-                        <label>Tempo (BPM): <span id="p${i}-bpm-val">120</span></label>
-                        <input type="range" id="p${i}-bpm" min="60" max="180" value="120" oninput="document.getElementById('p${i}-bpm-val').textContent=this.value">
-                    </div>
-                `;
-                container.appendChild(div);
+        function initGraph() {
+            const numPhases = parseInt(document.getElementById('numPhases').value) || 4;
+            graphData = [];
+
+            for (let i = 0; i < numPhases; i++) {
+                // Default values (zig-zag for demo)
+                const isPeak = i % 2 !== 0;
+                graphData.push({
+                    energy: isPeak ? 0.8 : 0.4,
+                    dance: isPeak ? 0.8 : 0.5,
+                    valence: 0.5,
+                    tempo: isPeak ? 0.7 : 0.4 // 0.5 = 130 BPM approx (range 60-200)
+                });
             }
+            drawGraph();
         }
+
+        // Draw the Graph
+        function drawGraph() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const padding = 40;
+            const w = canvas.width - padding * 2;
+            const h = canvas.height - padding * 2;
+            const numPhases = graphData.length;
+            const stepX = w / (numPhases - 1);
+
+            // Draw Grid & Axes
+            ctx.strokeStyle = '#eee';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            // Horizontal lines
+            for (let i = 0; i <= 4; i++) {
+                const y = padding + h - (h * (i / 4));
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.fillStyle = '#999';
+                ctx.fillText(`${i * 25}%`, 5, y + 4);
+            }
+            // Vertical lines (Phases)
+            for (let i = 0; i < numPhases; i++) {
+                const x = padding + (i * stepX);
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, canvas.height - padding);
+                ctx.fillStyle = '#333';
+                ctx.fillText(`Phase ${i + 1}`, x - 20, canvas.height - 10);
+            }
+            ctx.stroke();
+
+            // Helper to draw line
+            const drawLine = (prop, color) => {
+                ctx.beginPath();
+                ctx.strokeStyle = color;
+                ctx.lineWidth = 3;
+                graphData.forEach((p, i) => {
+                    const x = padding + (i * stepX);
+                    const y = padding + h - (p[prop] * h);
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.stroke();
+
+                // Draw points
+                graphData.forEach((p, i) => {
+                    const x = padding + (i * stepX);
+                    const y = padding + h - (p[prop] * h);
+                    ctx.fillStyle = color;
+                    ctx.beginPath();
+                    ctx.arc(x, y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    // Border for better visibility
+                    ctx.strokeStyle = 'white';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                });
+            };
+
+            drawLine('energy', '#FF5722');
+            drawLine('dance', '#2196F3');
+            drawLine('valence', '#4CAF50');
+            drawLine('tempo', '#FFC107');
+        }
+
+        // Interaction Logic
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            // Scale mouse coordinates to canvas resolution
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (e.clientX - rect.left) * scaleX;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            const padding = 40;
+            const w = canvas.width - padding * 2;
+            const h = canvas.height - padding * 2;
+            const numPhases = graphData.length;
+            const stepX = w / (numPhases - 1);
+
+            // Check collision with points
+            const props = ['energy', 'dance', 'valence', 'tempo'];
+
+            for (let i = 0; i < numPhases; i++) {
+                const x = padding + (i * stepX);
+
+                for (const prop of props) {
+                    const y = padding + h - (graphData[i][prop] * h);
+                    const dist = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2);
+
+                    if (dist < 15) { // Hit radius
+                        isDragging = true;
+                        dragPoint = { phaseIndex: i, type: prop };
+                        return;
+                    }
+                }
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDragging || !dragPoint) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleY = canvas.height / rect.height;
+            const mouseY = (e.clientY - rect.top) * scaleY;
+
+            const padding = 40;
+            const h = canvas.height - padding * 2;
+
+            // Calculate new value (0-1)
+            let val = 1 - ((mouseY - padding) / h);
+            // Clamp
+            val = Math.max(0, Math.min(1, val));
+
+            graphData[dragPoint.phaseIndex][dragPoint.type] = val;
+            drawGraph();
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            isDragging = false;
+            dragPoint = null;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            isDragging = false;
+            dragPoint = null;
+        });
 
         function generateFlow() {
             if (!window.allTracks || window.allTracks.length === 0) {
@@ -362,29 +480,24 @@
 
             const targetDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
             const targetDurationMs = targetDurationMin * 60 * 1000;
-            const numPhases = parseInt(document.getElementById('numPhases').value);
 
-            let availableTracks = [...window.allTracks]; // Copy
+            let availableTracks = [...window.allTracks];
             let finalPlaylist = [];
 
-            // Helper to safely get float value regardless of case
             const getVal = (obj, key) => {
                 const val = obj[key] || obj[key.toLowerCase()];
                 return parseFloat(val || 0);
             };
 
-            // 1. Parse Phase Configs
-            const phases = [];
-            for (let i = 1; i <= numPhases; i++) {
-                phases.push({
-                    id: i,
-                    durPct: parseInt(document.getElementById(`p${i}-dur`).value) / 100,
-                    targetEnergy: parseInt(document.getElementById(`p${i}-nrg`).value) / 100,
-                    targetDance: parseInt(document.getElementById(`p${i}-dnc`).value) / 100,
-                    targetValence: parseInt(document.getElementById(`p${i}-val`).value) / 100,
-                    targetBpm: parseInt(document.getElementById(`p${i}-bpm`).value)
-                });
-            }
+            // Use graphData directly
+            const phases = graphData.map((p, i) => ({
+                id: i + 1,
+                durPct: 1 / graphData.length, // Equal duration for now (simplification)
+                targetEnergy: p.energy,
+                targetDance: p.dance,
+                targetValence: p.valence,
+                targetBpm: 60 + (p.tempo * 140) // Map 0-1 to 60-200 BPM
+            }));
 
             // 2. Generate
             for (const phase of phases) {
@@ -392,9 +505,7 @@
                 let phaseCurrentMs = 0;
                 const phaseTracks = [];
 
-                // Greedy Selection
                 while (phaseCurrentMs < phaseTargetMs && availableTracks.length > 0) {
-
                     let bestTrackIndex = -1;
                     let bestScore = Infinity;
 
@@ -406,7 +517,6 @@
                         const val = getVal(track, "Valence");
                         const bpm = getVal(track, "Tempo");
 
-                        // Weighted Distance
                         const dist =
                             Math.pow(nrg - phase.targetEnergy, 2) +
                             Math.pow(dnc - phase.targetDance, 2) +
@@ -421,13 +531,11 @@
 
                     if (bestTrackIndex !== -1) {
                         const selectedTrack = availableTracks[bestTrackIndex];
-                        selectedTrack["Phase"] = `Phase ${phase.id}`; // Add Phase Tag
-
+                        selectedTrack["Phase"] = `Phase ${phase.id}`;
                         phaseTracks.push(selectedTrack);
 
-                        // Duration might be "Duration (ms)" or "duration_ms" etc.
                         let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);
-                        if (isNaN(dur)) dur = 240000; // Fallback 4min
+                        if (isNaN(dur)) dur = 240000;
 
                         phaseCurrentMs += dur;
                         availableTracks.splice(bestTrackIndex, 1);
@@ -435,7 +543,6 @@
                         break;
                     }
                 }
-
                 finalPlaylist = finalPlaylist.concat(phaseTracks);
             }
 
@@ -444,12 +551,8 @@
                 return;
             }
 
-            // Render Result
             displayResults(finalPlaylist);
-
-            // Scroll to results
             document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
-
             alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
         }
 

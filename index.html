@@ -41,7 +41,17 @@
         <p id="errorDetails"></p>
     </div>
 
-    <div id="login-section">
+    <div id="login-section" style="text-align: center;">
+        <div style="margin-bottom: 20px;">
+            <label for="clientIdInput" style="display: block; margin-bottom: 5px; font-weight: bold;">Spotify Client ID
+                :</label>
+            <input type="text" id="clientIdInput" placeholder="Entrez votre Client ID ici"
+                style="padding: 10px; width: 300px; border: 1px solid #ccc; border-radius: 5px;">
+            <p style="font-size: 12px; color: #666; margin-top: 5px;">
+                <a href="https://developer.spotify.com/dashboard" target="_blank">Créer une App Spotify</a> |
+                Redirect URI à ajouter : <code id="redirectUriDisplay"></code>
+            </p>
+        </div>
         <button id="loginBtn"
             style="background-color: #1DB954; color: white; font-size: 16px; padding: 15px 30px; border: none; border-radius: 25px; cursor: pointer;">
             Se connecter avec Spotify (PKCE)
@@ -98,10 +108,20 @@
             // ------------------------------------------------------
             // CONFIGURATION
             // ------------------------------------------------------
-            const CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
-            const redirectUri = "https://jlbaenlo.github.io/";
+            // Default ID (fallback) - likely restricted
+            const DEFAULT_CLIENT_ID = "1795fe450d3a4f6ebe2ce1cdcfbc21bf";
+            const redirectUri = window.location.origin + window.location.pathname; // Auto-detect
+
+            // Display Redirect URI for user convenience
+            document.getElementById("redirectUriDisplay").textContent = redirectUri;
 
             let accessToken = null;
+
+            // Load saved Client ID
+            const savedClientId = localStorage.getItem('spotify_client_id');
+            if (savedClientId) {
+                document.getElementById("clientIdInput").value = savedClientId;
+            }
 
             // ------------------------------------------------------
             // PKCE HELPERS
@@ -147,6 +167,7 @@
             // Handle Logout
             document.getElementById("logoutBtn").onclick = () => {
                 localStorage.removeItem('code_verifier');
+                localStorage.removeItem('access_token'); // Optional: clear token if we stored it
                 window.location.href = window.location.origin + window.location.pathname;
             };
 
@@ -157,11 +178,14 @@
 
             if (code) {
                 const codeVerifier = localStorage.getItem('code_verifier');
+                // Retrieve the Client ID used for the request
+                const clientId = localStorage.getItem('spotify_client_id') || DEFAULT_CLIENT_ID;
+
                 const body = new URLSearchParams({
                     grant_type: 'authorization_code',
                     code: code,
                     redirect_uri: redirectUri,
-                    client_id: CLIENT_ID,
+                    client_id: clientId,
                     code_verifier: codeVerifier
                 });
 
@@ -216,6 +240,13 @@
 
             // 3. START LOGIN
             document.getElementById("loginBtn").onclick = async function () {
+                const inputClientId = document.getElementById("clientIdInput").value.trim();
+                const clientId = inputClientId || DEFAULT_CLIENT_ID;
+
+                if (inputClientId) {
+                    localStorage.setItem('spotify_client_id', inputClientId);
+                }
+
                 const codeVerifier = generateRandomString(128);
                 const codeChallenge = await generateCodeChallenge(codeVerifier);
                 localStorage.setItem('code_verifier', codeVerifier);
@@ -223,7 +254,7 @@
                 // Ajout de scopes standards pour éviter les soucis de permissions
                 const scope = "user-read-private user-read-email user-read-playback-state playlist-read-private playlist-modify-private playlist-modify-public";
                 const authUrl = "https://accounts.spotify.com/authorize" +
-                    `?client_id=${CLIENT_ID}` +
+                    `?client_id=${clientId}` +
                     `&response_type=code` +
                     `&redirect_uri=${encodeURIComponent(redirectUri)}` +
                     `&scope=${encodeURIComponent(scope)}` +
@@ -569,6 +600,8 @@
                     }).filter(item => item !== null); // Remove failed items
 
                     // Render Table
+                    logDebug(`Building UI for ${fullData.length} tracks...`);
+
                     // Columns: All requested columns
                     const thead = document.querySelector("#resultsContainer table thead tr");
                     thead.innerHTML = `
@@ -635,6 +668,7 @@
                     });
 
                     resultsContainer.style.display = "block";
+                    logDebug("UI updated. Table should be visible.");
                     statusEl.textContent = "✅ Analyse terminée !";
                     statusEl.style.color = "green";
 

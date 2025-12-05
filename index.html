@@ -216,50 +216,53 @@
         });
 
         function displayResults(data) {
+            const resultsContainer = document.getElementById('resultsContainer');
+            const table = document.getElementById('tracksTable');
+            const thead = table.querySelector('thead');
             const tbody = document.getElementById('tracksTableBody');
+
+            // Clear existing
+            thead.innerHTML = "";
             tbody.innerHTML = "";
 
+            if (data.length === 0) return;
+
+            // Get all headers from the first row
+            const headers = Object.keys(data[0]);
+
+            // Create Header Row
+            const headerRow = document.createElement('tr');
+            // Add an index column header
+            const thIndex = document.createElement('th');
+            thIndex.textContent = "#";
+            headerRow.appendChild(thIndex);
+
+            headers.forEach(header => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                headerRow.appendChild(th);
+            });
+            thead.appendChild(headerRow);
+
+            // Create Data Rows
             data.forEach((row, index) => {
-                // Map Exportify Columns to our display
-                // Exportify columns: "Track Name", "Artist Name(s)", "Album Name", "Tempo", "Key", "Mode", "Danceability", "Energy", "Valence", "Duration (ms)", "Genres"
-
-                const title = row["Track Name"] || row["Name"] || "Unknown";
-                const artist = row["Artist Name(s)"] || row["Artist"] || "Unknown";
-                const album = row["Album Name"] || row["Album"] || "Unknown";
-                const bpm = Math.round(parseFloat(row["Tempo"]) || 0);
-                const dance = parseFloat(row["Danceability"] || 0).toFixed(3);
-                const energy = parseFloat(row["Energy"] || 0).toFixed(3);
-                const valence = parseFloat(row["Valence"] || 0).toFixed(3);
-                const genre = row["Genres"] || "";
-
-                // Duration
-                const durationMs = parseInt(row["Duration (ms)"] || 0);
-                const durationMin = Math.floor(durationMs / 60000);
-                const durationSec = ((durationMs % 60000) / 1000).toFixed(0).padStart(2, '0');
-
-                // Key
-                const key = row["Key"];
-                const mode = row["Mode"];
-                const camelot = getCamelotKey(key, mode);
-
                 const tr = document.createElement('tr');
-                tr.innerHTML = `
-                    <td>${index + 1}</td>
-                    <td>${title}</td>
-                    <td>${artist}</td>
-                    <td>${album}</td>
-                    <td>${bpm}</td>
-                    <td>${camelot}</td>
-                    <td>${dance}</td>
-                    <td>${energy}</td>
-                    <td>${valence}</td>
-                    <td>${durationMin}:${durationSec}</td>
-                    <td>${genre}</td>
-                `;
+
+                // Index cell
+                const tdIndex = document.createElement('td');
+                tdIndex.textContent = index + 1;
+                tr.appendChild(tdIndex);
+
+                headers.forEach(header => {
+                    const td = document.createElement('td');
+                    // Basic formatting for known types could go here, but raw is safer for "all fields"
+                    td.textContent = row[header];
+                    tr.appendChild(td);
+                });
                 tbody.appendChild(tr);
             });
 
-            document.getElementById('resultsContainer').style.display = 'block';
+            resultsContainer.style.display = 'block';
 
             // Setup Re-export
             document.getElementById('exportBtn').onclick = () => {

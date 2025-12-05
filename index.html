@@ -125,6 +125,19 @@
             }
 
             // ------------------------------------------------------
+            // LOGGING HELPER
+            // ------------------------------------------------------
+            function logDebug(message) {
+                console.log(message);
+                const debugLog = document.getElementById("debugLog");
+                if (debugLog) {
+                    debugLog.style.display = "block";
+                    debugLog.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${message}</div>`;
+                    debugLog.scrollTop = debugLog.scrollHeight;
+                }
+            }
+
+            // ------------------------------------------------------
             // MAIN EXECUTION
             // ------------------------------------------------------
             const args = new URLSearchParams(window.location.search);

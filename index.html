@@ -142,8 +142,8 @@
 <body>
 
     <div class="container">
-        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v6 - Final
-                UI)</span></h1>
+        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v7 -
+                Debug)</span></h1>
         <p style="text-align: center;">Analysez et triez vos playlists via Exportify</p>
 
         <div class="step">
@@ -242,7 +242,7 @@
         </div>
 
         <script>
-            alert("Script loaded OK!");
+            // Script start
             // Camelot Helper
             function getCamelotKey(key, mode) {
                 // Exportify usually gives Key as integer (0-11) and Mode as integer (0 or 1)
@@ -327,7 +327,7 @@
             document.getElementById('csvFile').addEventListener('change', handleFileSelect, false);
 
             function handleFileSelect(evt) {
-                alert("File selected! Starting parse...");
+                showDebugBanner("FILE SELECTED - PARSING...", "orange");
                 const file = evt.target.files[0];
                 if (!file) return;
 
@@ -734,9 +734,18 @@
                 dragPoint = null;
             });
 
-            function generateFlow() {
-                alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
+            // Removed generateFlow to prevent ReferenceError
+
+            // Visual Debug Helper
+            function showDebugBanner(msg, color = 'green') {
+                const banner = document.createElement('div');
+                banner.textContent = msg;
+                banner.style.cssText = `position:fixed;top:0;left:0;width:100%;background:${color};color:white;text-align:center;padding:10px;z-index:10000;font-weight:bold;font-size:18px;`;
+                document.body.appendChild(banner);
+                setTimeout(() => banner.remove(), 5000);
             }
+
+            showDebugBanner("SCRIPT LOADED OK (V7)", "blue");
 
             function displayResults(data) {
                 const resultsContainer = document.getElementById('resultsContainer');

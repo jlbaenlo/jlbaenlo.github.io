@@ -253,6 +253,13 @@
             };
             console.log("Script Global Error Handler Installed");
 
+            // Graph Variables (Moved to top to prevent ReferenceError)
+            let graphData = [];
+            const canvas = document.getElementById('flowGraph');
+            const ctx = canvas.getContext('2d');
+            let isDragging = false;
+            let dragPoint = null; // { phaseIndex, type }
+
             // Script start
             // Camelot Helper
             function getCamelotKey(key, mode) {
@@ -394,12 +401,6 @@
             }
 
             // --- PHASE ALGORITHM UI & LOGIC (GRAPH VERSION) ---
-
-            let graphData = [];
-            const canvas = document.getElementById('flowGraph');
-            const ctx = canvas.getContext('2d');
-            let isDragging = false;
-            let dragPoint = null; // { phaseIndex, type }
 
             // Event Listeners
             document.getElementById('numPhases').addEventListener('change', initGraph);

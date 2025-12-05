@@ -169,6 +169,13 @@
                     <input type="number" id="targetDuration" value="60" style="width: 80px; padding: 5px;">
                 </div>
                 <div>
+                    <label>Mode:</label>
+                    <select id="flowMode" style="padding: 5px; width: 100px;">
+                        <option value="party" selected>🎉 Party</option>
+                        <option value="apero">🍷 Apéro</option>
+                    </select>
+                </div>
+                <div>
                     <label>Nombre de Phases:</label>
                     <input type="number" id="numPhases" value="5" min="2" max="10" style="width: 60px; padding: 5px;">
                 </div>
@@ -326,38 +333,59 @@
 
         // Initialize Graph Data
         document.getElementById('numPhases').addEventListener('change', initGraph);
+        document.getElementById('flowMode').addEventListener('change', initGraph);
 
         function initGraph() {
             const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
+            const mode = document.getElementById('flowMode').value;
             graphData = [];
 
-            // DJ Party Curve Standards (approximate)
-            // If 5 phases, we use a specific "Warmup -> Build -> Peak -> Sustain -> Cool Down" curve.
-            // Otherwise, we generate a generic build-up curve.
-
-            if (numPhases === 5) {
-                graphData = [
-                    { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35 }, // Warm-up (~110 BPM)
-                    { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45 }, // Build (~123 BPM)
-                    { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55 }, // Peak (~137 BPM)
-                    { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5 }, // Sustain (~130 BPM)
-                    { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35 }  // Cool Down (~110 BPM)
-                ];
-            } else {
-                // Generic Build-Up Curve for other phase counts
+            if (mode === 'party') {
+                // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
+                if (numPhases === 5) {
+                    graphData = [
+                        { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35 }, // Warm-up
+                        { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45 }, // Build
+                        { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55 }, // Peak
+                        { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5 }, // Sustain
+                        { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35 }  // Cool Down
+                    ];
+                } else {
+                    // Generic Build-Up for Party
+                    for (let i = 0; i < numPhases; i++) {
+                        const progress = i / (numPhases - 1);
+                        let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
+                        graphData.push({
+                            energy: intensity,
+                            dance: Math.min(1, intensity + 0.1),
+                            valence: 0.5 + (intensity * 0.3),
+                            tempo: 0.3 + (intensity * 0.3)
+                        });
+                    }
+                }
+            } else if (mode === 'apero') {
+                // Apéro Curve: Chill, consistent, happy but low energy
                 for (let i = 0; i < numPhases; i++) {
-                    const progress = i / (numPhases - 1);
-                    // Parabolic arc: Start low, peak at 75%, drop slightly
-                    let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
-
+                    // Slight wave but mostly flat
+                    const wave = Math.sin(i * 0.5) * 0.1;
                     graphData.push({
-                        energy: intensity,
-                        dance: Math.min(1, intensity + 0.1),
-                        valence: 0.5 + (intensity * 0.3),
-                        tempo: 0.3 + (intensity * 0.3)
+                        energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
+                        dance: 0.4 + wave,        // Moderate Dance (groove)
+                        valence: 0.7,             // High Valence (Happy/Chill)
+                        tempo: 0.3 + (wave * 0.5) // Low Tempo (~100 BPM)
                     });
                 }
             }
+
+            // Fallback if length mismatch (e.g. switching numPhases manually)
+            // We ensure graphData matches numPhases
+            while (graphData.length < numPhases) {
+                graphData.push({ energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5 });
+            }
+            while (graphData.length > numPhases) {
+                graphData.pop();
+            }
+
             drawGraph();
         }
 

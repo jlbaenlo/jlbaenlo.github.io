@@ -355,7 +355,12 @@
 
             let availableTracks = [...window.allTracks]; // Copy
             let finalPlaylist = [];
-            let currentDuration = 0;
+
+            // Helper to safely get float value regardless of case
+            const getVal = (obj, key) => {
+                const val = obj[key] || obj[key.toLowerCase()];
+                return parseFloat(val || 0);
+            };
 
             // 1. Parse Phase Configs
             const phases = [];
@@ -370,39 +375,32 @@
                 });
             }
 
-            // Normalize Durations (ensure sum is 100% roughly, or just use raw time)
-            // We'll use the % as a target of the TOTAL desired duration.
-
+            // 2. Generate
             for (const phase of phases) {
                 const phaseTargetMs = targetDurationMs * phase.durPct;
                 let phaseCurrentMs = 0;
                 const phaseTracks = [];
 
                 // Greedy Selection
-                // While we have room in this phase AND tracks available
                 while (phaseCurrentMs < phaseTargetMs && availableTracks.length > 0) {
 
-                    // Score all available tracks against this phase's targets
-                    // Lower score = better match (distance)
                     let bestTrackIndex = -1;
                     let bestScore = Infinity;
 
                     for (let t = 0; t < availableTracks.length; t++) {
                         const track = availableTracks[t];
 
-                        // Parse features (handle missing/bad data safely)
-                        const nrg = parseFloat(track["Energy"] || 0);
-                        const dnc = parseFloat(track["Danceability"] || 0);
-                        const val = parseFloat(track["Valence"] || 0);
-                        const bpm = parseFloat(track["Tempo"] || 0);
+                        const nrg = getVal(track, "Energy");
+                        const dnc = getVal(track, "Danceability");
+                        const val = getVal(track, "Valence");
+                        const bpm = getVal(track, "Tempo");
 
                         // Weighted Distance
-                        // We weigh BPM slightly less because it varies more widely than 0-1 stats
                         const dist =
                             Math.pow(nrg - phase.targetEnergy, 2) +
                             Math.pow(dnc - phase.targetDance, 2) +
                             Math.pow(val - phase.targetValence, 2) +
-                            Math.pow((bpm - phase.targetBpm) / 200, 2); // Normalize BPM diff roughly
+                            Math.pow((bpm - phase.targetBpm) / 200, 2);
 
                         if (dist < bestScore) {
                             bestScore = dist;
@@ -412,24 +410,27 @@
 
                     if (bestTrackIndex !== -1) {
                         const selectedTrack = availableTracks[bestTrackIndex];
-
-                        // Add Phase Info to track for display
-                        selectedTrack["Phase"] = `Phase ${phase.id}`;
+                        selectedTrack["Phase"] = `Phase ${phase.id}`; // Add Phase Tag
 
                         phaseTracks.push(selectedTrack);
 
-                        // Update counters
-                        const dur = parseInt(selectedTrack["Duration (ms)"] || 0);
-                        phaseCurrentMs += dur;
+                        // Duration might be "Duration (ms)" or "duration_ms" etc.
+                        let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);
+                        if (isNaN(dur)) dur = 240000; // Fallback 4min
 
-                        // Remove from available
+                        phaseCurrentMs += dur;
                         availableTracks.splice(bestTrackIndex, 1);
                     } else {
-                        break; // No tracks left
+                        break;
                     }
                 }
 
                 finalPlaylist = finalPlaylist.concat(phaseTracks);
+            }
+
+            if (finalPlaylist.length === 0) {
+                alert("⚠️ Aucun titre n'a été sélectionné.\n\nVérifiez que votre fichier CSV contient bien les colonnes 'Energy', 'Danceability', 'Valence' et 'Tempo'.");
+                return;
             }
 
             // Render Result
@@ -438,7 +439,7 @@
             // Scroll to results
             document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
 
-            alert(`Playlist générée ! ${finalPlaylist.length} titres sélectionnés.`);
+            alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
         }
 
         function displayResults(data) {

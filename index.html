@@ -440,9 +440,17 @@
                     // 3. Fetch Audio Features (Handle 403)
                     statusEl.textContent = "Analyse en cours… (Récupération des audio features)";
                     logDebug("Fetching audio features...");
+
+                    // Log User Status for Debugging
+                    const userStatusEl = document.getElementById("userStatus");
+                    logDebug(`User Status Text: ${userStatusEl ? userStatusEl.textContent : 'Unknown'}`);
+
                     let audioFeaturesMap = {}; // id -> feature object
                     try {
-                        const audioResp = await fetch(`https://api.spotify.com/v1/audio-features?ids=${trackIds}`, {
+                        const url = `https://api.spotify.com/v1/audio-features?ids=${trackIds}`;
+                        logDebug(`Requesting URL: ${url}`);
+
+                        const audioResp = await fetch(url, {
                             headers: { Authorization: "Bearer " + accessToken }
                         });
                         logDebug(`Audio Features Status: ${audioResp.status}`);
@@ -457,12 +465,18 @@
                             } else {
                                 logDebug("⚠️ Received OK response but 'audio_features' is missing or empty.");
                             }
-                        } else if (audioResp.status === 403) {
-                            logDebug("❌ Audio Features: 403 Forbidden. (Premium required or App restriction)");
-                            console.warn("Audio Features: 403 Forbidden");
-                            // Don't throw, just leave map empty
                         } else {
+                            const errorBody = await audioResp.text();
                             logDebug(`❌ Audio Features Error: ${audioResp.status}`);
+                            logDebug(`❌ Error Body: ${errorBody}`);
+                            console.error("Audio Features Error Body:", errorBody);
+
+                            if (audioResp.status === 403) {
+                                logDebug("❌ 403 Forbidden. This usually means:");
+                                logDebug("   1. The account is not Premium (Audio Features are restricted).");
+                                logDebug("   2. The App was recently created and is in 'Development Mode' (users must be manually added).");
+                                logDebug("   3. Spotify API has deprecated this endpoint for some keys.");
+                            }
                         }
                     } catch (e) {
                         logDebug(`❌ Exception fetching audio features: ${e.message}`);

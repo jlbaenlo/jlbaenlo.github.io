@@ -387,10 +387,40 @@
             let isDragging = false;
             let dragPoint = null; // { phaseIndex, type }
 
-            // Initialize Graph Data
+            // Event Listeners
             document.getElementById('numPhases').addEventListener('change', initGraph);
-            document.getElementById('flowMode').addEventListener('change', initGraph);
-            document.getElementById('startTime').addEventListener('change', drawGraph); // Redraw on time change
+            document.getElementById('flowMode').addEventListener('change', setModeDefaults); // Changed to setModeDefaults
+            document.getElementById('startTime').addEventListener('change', () => {
+                updateDuration();
+                drawGraph();
+            });
+
+            function setModeDefaults() {
+                const mode = document.getElementById('flowMode').value;
+                const numPhasesInput = document.getElementById('numPhases');
+                const startTimeInput = document.getElementById('startTime');
+                const endTimeInput = document.getElementById('endTime');
+
+                // 1. Reset Phases to 5
+                numPhasesInput.value = 5;
+
+                // 2. Set Duration based on Mode
+                const start = startTimeInput.value || "21:00";
+                const [h, m] = start.split(':').map(Number);
+                let durationHours = (mode === 'party') ? 5 : 3;
+
+                // Calculate End Time
+                let endH = (h + durationHours) % 24;
+                let endM = m;
+
+                endTimeInput.value = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+
+                // Update UI text
+                updateDuration();
+
+                // 3. Re-init Graph
+                initGraph();
+            }
 
             function initGraph() {
                 const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
@@ -401,48 +431,41 @@
 
                 if (mode === 'party') {
                     // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
+                    // "Valses ideales"
                     if (numPhases === 5) {
                         graphData = [
-                            { name: "Warm-up", energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 },
-                            { name: "Build", energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 },
-                            { name: "Peak", energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 },
-                            { name: "Sustain", energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 },
-                            { name: "Cool Down", energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }
+                            { name: "Warm-up", energy: 0.35, dance: 0.4, valence: 0.5, tempo: 0.3, duration: 0.15 },
+                            { name: "Build", energy: 0.60, dance: 0.7, valence: 0.7, tempo: 0.5, duration: 0.20 },
+                            { name: "Peak", energy: 0.95, dance: 0.9, valence: 0.8, tempo: 0.7, duration: 0.30 },
+                            { name: "Sustain", energy: 0.80, dance: 0.85, valence: 0.9, tempo: 0.6, duration: 0.20 },
+                            { name: "Cool Down", energy: 0.40, dance: 0.5, valence: 0.6, tempo: 0.4, duration: 0.15 }
                         ];
                     } else {
-                        // Generic Build-Up for Party
+                        // Generic
                         for (let i = 0; i < numPhases; i++) {
-                            const progress = i / (numPhases - 1);
-                            let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
-                            graphData.push({
-                                name: `Phase ${i + 1}`,
-                                energy: intensity,
-                                dance: Math.min(1, intensity + 0.1),
-                                valence: 0.5 + (intensity * 0.3),
-                                tempo: 0.3 + (intensity * 0.3),
-                                duration: defaultDur
-                            });
+                            graphData.push({ name: `Phase ${i + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
                         }
                     }
                 } else if (mode === 'apero') {
-                    // Apéro Curve: Chill, consistent, happy but low energy
-                    const aperoNames = ["Welcome", "Chill", "Groove", "Deep", "Sunset", "Vibe", "Lounge", "Relax", "Mood", "End"];
-                    for (let i = 0; i < numPhases; i++) {
-                        // Slight wave but mostly flat
-                        const wave = Math.sin(i * 0.5) * 0.1;
-                        graphData.push({
-                            name: aperoNames[i] || `Phase ${i + 1}`,
-                            energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
-                            dance: 0.4 + wave,        // Moderate Dance (groove)
-                            valence: 0.7,             // High Valence (Happy/Chill)
-                            tempo: 0.3 + (wave * 0.5), // Low Tempo (~100 BPM)
-                            duration: defaultDur
-                        });
+                    // Apero Curve (Chill -> Groove -> Sunset -> Deep -> Lounge)
+                    // "Valses ideales"
+                    if (numPhases === 5) {
+                        graphData = [
+                            { name: "Welcome", energy: 0.3, dance: 0.3, valence: 0.7, tempo: 0.3, duration: 0.2 },
+                            { name: "Chill", energy: 0.4, dance: 0.4, valence: 0.8, tempo: 0.35, duration: 0.2 },
+                            { name: "Groove", energy: 0.5, dance: 0.6, valence: 0.85, tempo: 0.4, duration: 0.2 },
+                            { name: "Deep", energy: 0.45, dance: 0.5, valence: 0.7, tempo: 0.35, duration: 0.2 },
+                            { name: "Sunset", energy: 0.3, dance: 0.3, valence: 0.6, tempo: 0.3, duration: 0.2 }
+                        ];
+                    } else {
+                        // Generic
+                        for (let i = 0; i < numPhases; i++) {
+                            graphData.push({ name: `Phase ${i + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
+                        }
                     }
                 }
 
                 // Fallback if length mismatch (e.g. switching numPhases manually)
-                // We ensure graphData matches numPhases
                 while (graphData.length < numPhases) {
                     graphData.push({ name: `Phase ${graphData.length + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
                 }

@@ -142,8 +142,8 @@
 <body>
 
     <div class="container">
-        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v4 -
-                Dynamic)</span></h1>
+        <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(v5 - Time
+                Axis)</span></h1>
         <p style="text-align: center;">Analysez et triez vos playlists via Exportify</p>
 
         <div class="step">
@@ -167,6 +167,10 @@
                 <div>
                     <label>Durée Totale (min):</label>
                     <input type="number" id="targetDuration" value="60" style="width: 80px; padding: 5px;">
+                </div>
+                <div>
+                    <label>Début:</label>
+                    <input type="time" id="startTime" value="21:00" style="padding: 5px; width: 80px;">
                 </div>
                 <div>
                     <label>Mode:</label>
@@ -334,6 +338,7 @@
         // Initialize Graph Data
         document.getElementById('numPhases').addEventListener('change', initGraph);
         document.getElementById('flowMode').addEventListener('change', initGraph);
+        document.getElementById('startTime').addEventListener('change', drawGraph); // Redraw on time change
 
         function initGraph() {
             const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
@@ -346,11 +351,11 @@
                 // DJ Party Curve Standards (Warmup -> Build -> Peak -> Sustain -> Cool Down)
                 if (numPhases === 5) {
                     graphData = [
-                        { energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 }, // Warm-up (15%)
-                        { energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 }, // Build (25%)
-                        { energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 }, // Peak (20%)
-                        { energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 }, // Sustain (25%)
-                        { energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }  // Cool Down (15%)
+                        { name: "Warm-up", energy: 0.4, dance: 0.5, valence: 0.6, tempo: 0.35, duration: 0.15 },
+                        { name: "Build", energy: 0.6, dance: 0.7, valence: 0.7, tempo: 0.45, duration: 0.25 },
+                        { name: "Peak", energy: 0.9, dance: 0.9, valence: 0.8, tempo: 0.55, duration: 0.20 },
+                        { name: "Sustain", energy: 0.85, dance: 0.95, valence: 0.9, tempo: 0.5, duration: 0.25 },
+                        { name: "Cool Down", energy: 0.5, dance: 0.6, valence: 0.5, tempo: 0.35, duration: 0.15 }
                     ];
                 } else {
                     // Generic Build-Up for Party
@@ -358,6 +363,7 @@
                         const progress = i / (numPhases - 1);
                         let intensity = 0.4 + (Math.sin(progress * Math.PI * 0.8) * 0.5);
                         graphData.push({
+                            name: `Phase ${i + 1}`,
                             energy: intensity,
                             dance: Math.min(1, intensity + 0.1),
                             valence: 0.5 + (intensity * 0.3),
@@ -368,10 +374,12 @@
                 }
             } else if (mode === 'apero') {
                 // Apéro Curve: Chill, consistent, happy but low energy
+                const aperoNames = ["Welcome", "Chill", "Groove", "Deep", "Sunset", "Vibe", "Lounge", "Relax", "Mood", "End"];
                 for (let i = 0; i < numPhases; i++) {
                     // Slight wave but mostly flat
                     const wave = Math.sin(i * 0.5) * 0.1;
                     graphData.push({
+                        name: aperoNames[i] || `Phase ${i + 1}`,
                         energy: 0.3 + wave,       // Low Energy (0.3 - 0.4)
                         dance: 0.4 + wave,        // Moderate Dance (groove)
                         valence: 0.7,             // High Valence (Happy/Chill)
@@ -384,7 +392,7 @@
             // Fallback if length mismatch (e.g. switching numPhases manually)
             // We ensure graphData matches numPhases
             while (graphData.length < numPhases) {
-                graphData.push({ energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
+                graphData.push({ name: `Phase ${graphData.length + 1}`, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5, duration: defaultDur });
             }
             while (graphData.length > numPhases) {
                 graphData.pop();
@@ -408,17 +416,32 @@
             const h = canvas.height - padding * 2;
             const numPhases = graphData.length;
 
+            // Time Calculation
+            const startTimeInput = document.getElementById('startTime').value || "21:00";
+            const [startH, startM] = startTimeInput.split(':').map(Number);
+            const startTotalMinutes = startH * 60 + startM;
+            const totalDurationMin = parseInt(document.getElementById('targetDuration').value) || 60;
+
             // Calculate X positions for each phase (center) and separators
             let currentX = padding;
+            let currentMinutes = 0;
             const phaseCenters = [];
-            const separators = []; // x positions
+            const separators = []; // { x, timeLabel }
 
             graphData.forEach((p, i) => {
                 const phaseWidth = p.duration * w;
                 phaseCenters.push(currentX + (phaseWidth / 2));
+
                 currentX += phaseWidth;
+                currentMinutes += p.duration * totalDurationMin;
+
                 if (i < numPhases - 1) {
-                    separators.push(currentX);
+                    // Calculate time label for separator
+                    const timeMins = startTotalMinutes + currentMinutes;
+                    const h = Math.floor((timeMins / 60) % 24);
+                    const m = Math.floor(timeMins % 60);
+                    const timeLabel = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
+                    separators.push({ x: currentX, label: timeLabel });
                 }
             });
 
@@ -438,27 +461,49 @@
 
             // Draw Separators (Vertical Lines)
             ctx.beginPath();
-            separators.forEach(x => {
-                ctx.moveTo(x, padding);
-                ctx.lineTo(x, canvas.height - padding);
+            separators.forEach(sep => {
+                ctx.moveTo(sep.x, padding);
+                ctx.lineTo(sep.x, canvas.height - padding);
             });
             ctx.strokeStyle = '#ddd';
             ctx.setLineDash([5, 5]);
             ctx.stroke();
             ctx.setLineDash([]);
 
-            // Draw Separator Handles (for interaction hint)
-            separators.forEach(x => {
+            // Draw Separator Handles & Time Labels
+            separators.forEach(sep => {
+                // Handle
                 ctx.fillStyle = '#ccc';
-                ctx.fillRect(x - 2, canvas.height - padding + 5, 4, 10);
+                ctx.fillRect(sep.x - 2, canvas.height - padding + 5, 4, 10);
+
+                // Time Label
+                ctx.fillStyle = '#666';
+                ctx.font = '11px monospace';
+                ctx.textAlign = 'center';
+                ctx.fillText(sep.label, sep.x, padding - 10); // Top label
             });
+
+            // Draw Start/End Time Labels
+            ctx.fillStyle = '#666';
+            ctx.font = '11px monospace';
+            ctx.textAlign = 'center';
+            // Start
+            ctx.fillText(startTimeInput, padding, padding - 10);
+            // End
+            const endMins = startTotalMinutes + totalDurationMin;
+            const endH = Math.floor((endMins / 60) % 24);
+            const endM = Math.floor(endMins % 60);
+            ctx.fillText(`${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`, canvas.width - padding, padding - 10);
+
 
             // Draw Phase Labels
             graphData.forEach((p, i) => {
                 const x = phaseCenters[i];
                 ctx.fillStyle = '#333';
                 ctx.textAlign = 'center';
-                ctx.fillText(`P${i + 1}`, x, canvas.height - 10);
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillText(p.name || `P${i + 1}`, x, canvas.height - 10);
+
                 ctx.fillStyle = '#999';
                 ctx.font = '10px Arial';
                 ctx.fillText(`${Math.round(p.duration * 100)}%`, x, canvas.height - 25);
@@ -638,7 +683,7 @@
 
             // Use graphData directly
             const phases = graphData.map((p, i) => ({
-                id: i + 1,
+                id: p.name || `Phase ${i + 1}`, // Use Name
                 durPct: p.duration, // Use dynamic duration
                 targetEnergy: p.energy,
                 targetDance: p.dance,
@@ -678,7 +723,7 @@
 
                     if (bestTrackIndex !== -1) {
                         const selectedTrack = availableTracks[bestTrackIndex];
-                        selectedTrack["Phase"] = `Phase ${phase.id}`;
+                        selectedTrack["Phase"] = phase.id; // Use Name directly
                         phaseTracks.push(selectedTrack);
 
                         let dur = parseInt(selectedTrack["Duration (ms)"] || selectedTrack["duration_ms"] || 0);

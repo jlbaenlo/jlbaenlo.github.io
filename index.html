@@ -211,6 +211,11 @@
                     💡 Cliquez et glissez les points pour ajuster les courbes.
                 </p>
             </div>
+
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="action-btn" onclick="generateFlow()" style="font-size: 1.2em; padding: 15px 30px;">🎵
+                    Générer la Playlist</button>
+            </div>
             <div id="resultStats" style="margin-top: 20px; font-weight: bold; color: #4CAF50;"></div>
             <div id="results"></div>
 
@@ -735,7 +740,96 @@
             });
 
             function generateFlow() {
-                alert(`✅ Playlist générée avec succès !\n${finalPlaylist.length} titres sélectionnés.`);
+                if (!window.allTracks || window.allTracks.length === 0) {
+                    alert("Veuillez d'abord importer un fichier CSV !");
+                    return;
+                }
+
+                const resultStatsEl = document.getElementById('resultStats');
+                resultStatsEl.textContent = "Génération en cours...";
+
+                // Deep copy tracks to allow modification (marking as used)
+                let availableTracks = [...window.allTracks];
+                let playlist = [];
+                let usedTrackIds = new Set(); // Use ID or URI if available, else use Name+Artist
+
+                // Get Target Duration
+                const targetDurationMin = parseFloat(document.getElementById('targetDuration').value) || 60;
+                const targetDurationMs = targetDurationMin * 60 * 1000;
+
+                let currentPlaylistDuration = 0;
+
+                // Process each phase
+                for (let i = 0; i < graphData.length; i++) {
+                    const phase = graphData[i];
+                    const phaseTargetDuration = targetDurationMs * phase.duration;
+                    let currentPhaseDuration = 0;
+
+                    // Normalize Phase Tempo to BPM (approximate mapping for display/logic)
+                    // But here we need to match Track BPM to Phase Normalized Tempo (0-1)
+                    // Assumption: 0 = 60 BPM, 1 = 180 BPM
+
+                    while (currentPhaseDuration < phaseTargetDuration && availableTracks.length > 0) {
+                        // Find best match for this phase
+                        let bestMatchIndex = -1;
+                        let bestMatchScore = Infinity;
+
+                        for (let j = 0; j < availableTracks.length; j++) {
+                            const track = availableTracks[j];
+
+                            // Parse Track Values (handle potential strings)
+                            const tEnergy = parseFloat(track["Energy"]) || 0;
+                            const tDance = parseFloat(track["Danceability"]) || 0;
+                            const tValence = parseFloat(track["Valence"]) || 0;
+                            const tTempoRaw = parseFloat(track["Tempo"]) || 120;
+
+                            // Normalize Track Tempo (60-180 range)
+                            let tTempo = (tTempoRaw - 60) / 120; // 120 is range (180-60)
+                            tTempo = Math.max(0, Math.min(1, tTempo));
+
+                            // Calculate Euclidean Distance
+                            // We can weight attributes if needed. For now equal weight.
+                            const dist = Math.sqrt(
+                                Math.pow(tEnergy - phase.energy, 2) +
+                                Math.pow(tDance - phase.dance, 2) +
+                                Math.pow(tValence - phase.valence, 2) +
+                                Math.pow(tTempo - phase.tempo, 2)
+                            );
+
+                            // Optional: Add some randomness to avoid identical results? 
+                            // Or strictly best match. Let's do purely best match for now.
+
+                            if (dist < bestMatchScore) {
+                                bestMatchScore = dist;
+                                bestMatchIndex = j;
+                            }
+                        }
+
+                        if (bestMatchIndex !== -1) {
+                            const selectedTrack = availableTracks[bestMatchIndex];
+                            playlist.push(selectedTrack);
+
+                            // Remove from available
+                            availableTracks.splice(bestMatchIndex, 1);
+
+                            // Add duration
+                            const dur = parseInt(selectedTrack["Duration (ms)"]) || 200000; // default 3m20s
+                            currentPhaseDuration += dur;
+                            currentPlaylistDuration += dur;
+                        } else {
+                            break; // No more tracks?
+                        }
+                    }
+                }
+
+                // Final Check
+                const finalDurationMin = Math.floor(currentPlaylistDuration / 1000 / 60);
+                resultStatsEl.textContent = `✅ Playlist générée ! ${playlist.length} titres, ~${finalDurationMin} minutes.`;
+
+                displayResults(playlist);
+
+                // Scroll to results
+                document.getElementById('resultsContainer').scrollIntoView({ behavior: 'smooth' });
             }
 
             function displayResults(data) {

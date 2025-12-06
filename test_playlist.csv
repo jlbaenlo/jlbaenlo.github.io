@@ -1,0 +1,3 @@
+Track Name,Artist Name(s),Album Name,BPM,Key,Mode,Danceability,Energy,Valence,Tempo,Duration (ms),Genres
+Song 1,Artist A,Album X,120,5,1,0.6,0.8,0.5,120,200000,Pop
+Song 2,Artist B,Album Y,100,0,0,0.4,0.3,0.2,100,180000,Rock

@@ -234,7 +234,7 @@
                 <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
                     <label style="font-size: 13px; display: flex; align-items: center; gap: 8px;">
                         <input type="checkbox" id="genreCohesion" checked>
-                        <span><b>Cohésion de Genre:</b> Grouper 2 à 4 musiques du même style à la suite (si
+                        <span><b>Cohésion de Genre:</b> Grouper 2 à 3 musiques du même style à la suite (si
                             possible).</span>
                     </label>
                     <label style="font-size: 13px; display: flex; align-items: center; gap: 8px; margin-top: 5px;">
@@ -1574,7 +1574,7 @@
                         if (useGenreCohesion && playlist.length > 0 && currentGenre) {
                             let tGenre = getAggregatedGenre(t['Genres'] || t['Artist Genres'] || t['Genre']);
                             if (tGenre === currentGenre) {
-                                if (genreStreak >= 4) dist += 10.0; // Penalty (Force Switch)
+                                if (genreStreak >= 3) dist += 10.0; // Penalty (Force Switch)
                                 else dist -= 0.1; // Bonus (Keep Going)
                             } else {
                                 if (genreStreak < 2) dist += 2.0; // Penalty (Switch too soon)

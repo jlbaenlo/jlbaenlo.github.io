@@ -373,6 +373,11 @@
         // --- INITIALIZATION ---
         window.onload = function () {
             log("System Loading (V1 - Advanced)...");
+
+            // Defaut Values
+            document.getElementById('genreCohesion').checked = true;
+            document.getElementById('harmonicMixing').checked = true;
+
             if (typeof Papa === 'undefined') {
                 log("ERROR: PapaParse missing!");
                 alert("Critical Error: Libraries failed to load.");
@@ -664,6 +669,27 @@
         function loadPreset() {
             const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
             const mode = document.getElementById('flowMode').value;
+
+            // Set Default Times based on Mode
+            const startEl = document.getElementById('startTime');
+            const endEl = document.getElementById('endTime');
+
+            if (mode === 'party') {
+                startEl.value = "21:00";
+                endEl.value = "03:00"; // 6h duration
+            } else if (mode === 'apero') {
+                startEl.value = "18:00";
+                endEl.value = "21:00"; // 3h duration
+            } else if (mode === 'sport') {
+                startEl.value = "18:00";
+                endEl.value = "19:00"; // 1h duration standard for workout
+            }
+            // Trigger time update to recalculate total minutes
+            updateTimeCalculations();
+
+            // Default Checkboxes to True (User Preference)
+            document.getElementById('genreCohesion').checked = true;
+            document.getElementById('harmonicMixing').checked = true;
 
             // If custom, do nothing or just init empty
             if (mode === 'custom') {

@@ -371,8 +371,32 @@
         const STATE_KEY = 'spotify_auth_state';
         const DEFAULT_CLIENT_ID = 'e37b29847db846ebbc8c6bfca9820c8d'; // Provided by User
 
+        // --- PKCE HELPERS ---
+        function generateRandomString(length) {
+            let text = '';
+            const possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+            for (let i = 0; i < length; i++) {
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+            }
+            return text;
+        }
+
+        async function generateCodeChallenge(codeVerifier) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(codeVerifier);
+            const digest = await window.crypto.subtle.digest('SHA-256', data);
+            return base64encode(digest);
+        }
+
+        function base64encode(string) {
+            return btoa(String.fromCharCode.apply(null, new Uint8Array(string)))
+                .replace(/\+/g, '-')
+                .replace(/\//g, '_')
+                .replace(/=+$/, '');
+        }
+
         async function handleSpotifyExport(playlistTracks) {
-            log("Initiating Spotify Export...");
+            log("Initiating Spotify Export (PKCE)...");
 
             // 1. Prompt for Name FIRST
             const defaultName = `My Flow - ${new Date().toLocaleDateString()}`;
@@ -388,31 +412,35 @@
 
             if (!token || (tokenExpiry && Date.now() > parseInt(tokenExpiry))) {
                 // Auth Flow Needed
-                log("Redirecting to Spotify Auth...");
+                log("Redirecting to Spotify Auth (PKCE)...");
 
-                // Use Hardcoded ID
                 let clientId = DEFAULT_CLIENT_ID;
+                const redirectUri = window.location.href.split('#')[0].split('?')[0]; // Clean URI
 
-                // Save State before redirect
+                // Generate PKCE Verifier & Challenge
+                const codeVerifier = generateRandomString(128);
+                const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+                // Save State & Verifier
                 const appState = {
                     rawTracks: rawTracks,
                     phases: phases,
                     startTime: document.getElementById('startTime').value,
                     endTime: document.getElementById('endTime').value,
                     mode: document.getElementById('flowMode').value,
-                    pendingExportName: playlistName // Save name for potential auto-resume
+                    pendingExportName: playlistName
                 };
                 localStorage.setItem(STATE_KEY, JSON.stringify(appState));
+                localStorage.setItem('spotify_code_verifier', codeVerifier);
 
-                const redirectUri = window.location.href.split('#')[0];
                 const scope = 'playlist-modify-public playlist-modify-private';
-                const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
+                const authUrl = `https://accounts.spotify.com/authorize?response_type=code&client_id=${clientId}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(redirectUri)}&code_challenge_method=S256&code_challenge=${codeChallenge}`;
 
                 window.location.href = authUrl;
                 return;
             }
 
-            // 3. We have a token - Proceed to Create Playlist
+            // 3. We have a token - Proceed...
             try {
                 // Get User Profile
                 const userReq = await fetch('https://api.spotify.com/v1/me', { headers: { 'Authorization': `Bearer ${token}` } });
@@ -477,10 +505,10 @@
         let totalTimeMinutes = 120; // Default 2h
 
         // --- INITIALIZATION ---
-        window.onload = function () {
+        window.onload = async function () {
             log("System Loading (V1 - Advanced)...");
 
-            // Defaut Values
+            // Default Values
             document.getElementById('genreCohesion').checked = true;
             document.getElementById('harmonicMixing').checked = true;
 
@@ -489,48 +517,95 @@
                 alert("Critical Error: Libraries failed to load.");
             }
 
-            // CHECK FOR SPOTIFY AUTH RETURN
-            const hash = window.location.hash.substring(1);
-            const params = new URLSearchParams(hash);
-            const accessToken = params.get('access_token');
-            if (accessToken) {
-                log("Spotify Auth Successful!");
-                localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
-                // Set expiry (1 hour usually)
-                localStorage.setItem('spotify_token_expiry', Date.now() + 3600 * 1000);
+            // CHECK FOR SPOTIFY AUTH RETURN (PKCE Code Flow)
+            const params = new URLSearchParams(window.location.search);
+            const authCode = params.get('code');
 
-                // Restore State
-                const savedState = localStorage.getItem(STATE_KEY);
-                if (savedState) {
-                    const state = JSON.parse(savedState);
-                    rawTracks = state.rawTracks || [];
-                    phases = state.phases || []; // Restore phases not fully supported by just setting var, need to redraw
+            if (authCode) {
+                log("Spotify Auth Code Received! Exchanging for Token...");
 
-                    // UI Restore
-                    document.getElementById('startTime').value = state.startTime;
-                    document.getElementById('endTime').value = state.endTime;
-                    document.getElementById('flowMode').value = state.mode;
-                    document.getElementById('import-status').textContent = `✅ ${rawTracks.length} titres (Restored).`;
-                    document.getElementById('step-config').classList.remove('hidden');
-                    document.getElementById('step-results').classList.remove('hidden'); // Show results area
+                // Exchange Code for Token
+                const clientId = DEFAULT_CLIENT_ID;
+                const redirectUri = window.location.href.split('?')[0]; // Current URL base
+                const verifier = localStorage.getItem('spotify_code_verifier');
 
-                    // Re-Normalize & Init
-                    normalizeTracks(rawTracks);
-                    calculateStats(rawTracks);
+                const body = new URLSearchParams({
+                    client_id: clientId,
+                    grant_type: 'authorization_code',
+                    code: authCode,
+                    redirect_uri: redirectUri,
+                    code_verifier: verifier
+                });
 
-                    // Restore Graph
-                    updateTimeCalculations();
-                    // Just triggering draw might fail if phases objects lost methods or structure, 
-                    // but they are simple objects. 
-                    // If phases were saved, use them.
-                    draw();
+                try {
+                    const response = await fetch('https://accounts.spotify.com/api/token', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        body: body
+                    });
 
-                    window.location.hash = ''; // Clean URL
+                    if (!response.ok) {
+                        const err = await response.json();
+                        throw new Error(err.error_description || "Token exchange failed");
+                    }
 
-                    // Prompt user to click Generate again or specific export button
-                    log("State restored. Ready to Generate/Export.");
+                    const data = await response.json();
+                    const accessToken = data.access_token;
+                    const expiresIn = data.expires_in;
+
+                    log("Token Acquired!");
+                    localStorage.setItem(ACCESS_TOKEN_KEY, accessToken);
+                    localStorage.setItem('spotify_token_expiry', Date.now() + expiresIn * 1000);
+
+                    // Clean URL
+                    window.history.replaceState({}, document.title, window.location.pathname);
+
+                    // Restore State
+                    const savedState = localStorage.getItem(STATE_KEY);
+                    if (savedState) {
+                        const state = JSON.parse(savedState);
+                        rawTracks = state.rawTracks || [];
+                        phases = state.phases || [];
+
+                        document.getElementById('startTime').value = state.startTime;
+                        document.getElementById('endTime').value = state.endTime;
+                        document.getElementById('flowMode').value = state.mode;
+                        document.getElementById('import-status').textContent = `✅ ${rawTracks.length} titres (Restored).`;
+                        document.getElementById('step-config').classList.remove('hidden');
+                        document.getElementById('step-results').classList.remove('hidden');
+
+                        normalizeTracks(rawTracks);
+                        calculateStats(rawTracks);
+                        updateTimeCalculations();
+                        draw();
+
+                        log("State restored.");
+
+                        // Auto-Resume Export if name was saved
+                        if (state.pendingExportName) {
+                            if (confirm(`Export prêt pour "${state.pendingExportName}". Continuer?`)) {
+                                // We need to re-generate the playlistTracks since they weren't saved fully processed usually
+                                // But we have rawTracks. The user needs to Click Generate usually to get the sorted list.
+                                // A simpler way: Force user to click Generate again.
+                                alert("Authentification réussie ! Cliquez sur 'Générer' puis sur 'Export to Spotify' pour finaliser.");
+                            }
+                        }
+                    }
+
+                } catch (e) {
+                    log("PKCE Error: " + e.message);
+                    console.error(e);
+                    alert("Erreur d'authentification Spotify : " + e.message);
                 }
+                return;
             } else {
+                // Check for Legacy Hash Error
+                if (window.location.hash.includes('error=')) {
+                    log("Auth Error detected in URL Hash.");
+                    alert("Erreur d'authentification (Legacy). Réessayez.");
+                }
                 updateTimeCalculations();
             }
         };

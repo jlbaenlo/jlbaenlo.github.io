@@ -412,8 +412,19 @@
         const mDesc = document.getElementById('modalDesc');
         const mInputDiv = document.getElementById('modalInputContainer');
         const mInput = document.getElementById('modalInput');
-        const mConfirm = document.getElementById('modalConfirmBtn');
-        const mCancel = document.getElementById('modalCancelBtn');
+        const mActions = document.getElementById('modalActions'); // Need to target this to swap content
+
+        // We'll create dynamic buttons to ensure clean state
+        function resetModalButtons() {
+            const oldConfirm = document.getElementById('modalConfirmBtn');
+            const oldCancel = document.getElementById('modalCancelBtn');
+            // Clone to strip listeners
+            const newConfirm = oldConfirm.cloneNode(true);
+            const newCancel = oldCancel.cloneNode(true);
+            oldConfirm.parentNode.replaceChild(newConfirm, oldConfirm);
+            oldCancel.parentNode.replaceChild(newCancel, oldCancel);
+            return { confirm: newConfirm, cancel: newCancel };
+        }
 
         function showInputModal(title, msg, defaultValue) {
             return new Promise((resolve) => {
@@ -421,35 +432,69 @@
                 mDesc.textContent = msg;
                 mInput.value = defaultValue;
                 mInputDiv.classList.remove('hidden');
-                let mWaitResolve = resolve; // Renamed to avoid conflict if this was global
 
-                mInput.focus();
-                mConfirm.textContent = "Valider";
-                mCancel.classList.remove('hidden');
-                mCancel.onclick = () => { closeModal(); mWaitResolve(null); };
-                mConfirm.onclick = () => { closeModal(); mWaitResolve(mInput.value); };
+                // Buttons
+                const btns = resetModalButtons();
+                btns.confirm.textContent = "Valider";
+                btns.confirm.style.display = 'inline-block';
+                btns.cancel.style.display = 'inline-block';
+                btns.cancel.onclick = () => { closeModal(); resolve(null); };
+                btns.confirm.onclick = () => { closeModal(); resolve(mInput.value); };
 
                 modal.classList.remove('hidden');
+                mInput.focus();
             });
+        }
+
+        function showLoadingModal(msg) {
+            mTitle.textContent = "Veuillez patienter...";
+            mDesc.textContent = msg;
+            mInputDiv.classList.add('hidden');
+
+            const btns = resetModalButtons();
+            btns.confirm.style.display = 'none';
+            btns.cancel.style.display = 'none'; // No cancel during loading
+
+            modal.classList.remove('hidden');
         }
 
         function showSuccessModal(title, msg, linkUrl) {
             mTitle.textContent = title;
-            mDesc.innerHTML = msg; // Allows HTML links
+            mDesc.innerHTML = msg;
             mInputDiv.classList.add('hidden');
 
-            mCancel.classList.add('hidden');
-            mConfirm.textContent = "Ouvrir Spotify ↗️";
-            mConfirm.onclick = () => {
-                closeModal();
-                if (linkUrl) window.open(linkUrl, '_blank');
-            };
+            const btns = resetModalButtons();
+            btns.cancel.style.display = 'inline-block';
+            btns.cancel.textContent = "Fermer";
+            btns.cancel.onclick = closeModal;
+
+            // Turn Confirm button into a Link-like trigger or just replace it
+            btns.confirm.style.display = 'none'; // Hide standard button
+
+            // Add custom Link Button if not exists
+            let linkBtn = document.getElementById('modalLinkBtn');
+            if (!linkBtn) {
+                linkBtn = document.createElement('a');
+                linkBtn.id = 'modalLinkBtn';
+                linkBtn.className = 'btn';
+                linkBtn.style.marginLeft = '10px';
+                linkBtn.style.textDecoration = 'none';
+                linkBtn.style.display = 'inline-block';
+                btns.confirm.parentNode.appendChild(linkBtn);
+            }
+            linkBtn.style.display = 'inline-block';
+            linkBtn.textContent = "Ouvrir Spotify ↗️";
+            linkBtn.href = linkUrl;
+            linkBtn.target = "_blank";
 
             modal.classList.remove('hidden');
         }
 
         function closeModal() {
             modal.classList.add('hidden');
+            // Hide link button if exists
+            const linkBtn = document.getElementById('modalLinkBtn');
+            if (linkBtn) linkBtn.style.display = 'none';
         }
 
         // --- UTILS ---
@@ -571,6 +616,8 @@
                     alert("Aucun URI Spotify trouvé. Vérifiez votre CSV.");
                     return;
                 }
+
+                showLoadingModal(`Export en cours...<br>Ajout de ${uris.length} titres.`);
 
                 // Batch requests
                 for (let i = 0; i < uris.length; i += 100) {

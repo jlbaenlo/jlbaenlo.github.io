@@ -226,6 +226,19 @@
 
                     <button id="resetGraphBtn" class="btn btn-secondary"
                         style="padding: 6px 12px; font-size: 12px;">Reset</button>
+
+                </div>
+                <!-- Advanced Constraints -->
+                <div style="margin-top: 10px; border-top: 1px solid #ccc; padding-top: 10px;">
+                    <label style="font-size: 13px; display: flex; align-items: center; gap: 8px;">
+                        <input type="checkbox" id="genreCohesion">
+                        <span><b>Cohésion de Genre:</b> Grouper 2 à 4 musiques du même style à la suite (si
+                            possible).</span>
+                    </label>
+                    <label style="font-size: 13px; display: flex; align-items: center; gap: 8px; margin-top: 5px;">
+                        <input type="checkbox" id="harmonicMixing">
+                        <span><b>Harmonic Mixing:</b> Favoriser les transitions harmoniques (Camelot Wheel).</span>
+                    </label>
                 </div>
             </div>
 
@@ -994,43 +1007,79 @@
         });
 
 
-        // --- STEP 3: GENERATION (Duration Based) ---
+        // --- STEP 3: GENERATION (Duration Based & Genre Chaining) ---
         document.getElementById('generateBtn').addEventListener('click', function () {
-            log("Computing Playlist (Time Based)...");
+            log("Computing Playlist...");
 
             let pool = [...rawTracks];
             let playlist = [];
             let currentDurMs = 0;
             const totalDurMs = totalTimeMinutes * 60000;
 
+            // Constraints
+            const useGenreCohesion = document.getElementById('genreCohesion').checked;
+            let currentGenre = null;
+            let genreStreak = 0;
+
             phases.forEach((p, i) => {
                 const phaseTargetDur = totalDurMs * p.durationPercent;
-                let phaseCurrentDur = 0;
+                let phaseCurrentDur = 0; // Accumulator for this phase
 
-                log(`Allocating ${p.name || `Phase ${i + 1}`}: Target ${(phaseTargetDur / 60000).toFixed(1)}m`);
+                log(`Allocating ${p.name}: Target ${(phaseTargetDur / 60000).toFixed(1)}m`);
 
-                // Try to fill this duration
                 while (phaseCurrentDur < phaseTargetDur && pool.length > 0) {
-                    // Find best match
                     let bestIdx = -1;
                     let bestScore = Infinity;
 
                     for (let k = 0; k < pool.length; k++) {
                         const t = pool[k];
 
-                        // Use Normalized values (_n) calculated on import
-                        const tE = t._nEnergy !== undefined ? t._nEnergy : (parseFloat(t.Energy) || 0.5);
-                        const tD = t._nDance !== undefined ? t._nDance : (parseFloat(t.Danceability) || 0.5);
-                        const tV = t._nValence !== undefined ? t._nValence : (parseFloat(t.Valence) || 0.5);
+                        // Normalized Values
+                        const tE = t._nEnergy !== undefined ? t._nEnergy : 0.5;
+                        const tD = t._nDance !== undefined ? t._nDance : 0.5;
+                        const tV = t._nValence !== undefined ? t._nValence : 0.5;
                         const tT = t._nTempo !== undefined ? t._nTempo : 0.5;
 
-                        // Euclidean Distance (Weighted equal)
-                        const dist = Math.sqrt(
+                        // Euclidean Distance (Core)
+                        let dist = Math.sqrt(
                             (tE - p.energy) ** 2 +
                             (tD - p.dance) ** 2 +
                             (tV - p.valence) ** 2 +
                             (tT - p.tempo) ** 2
                         );
+
+                        // --- GENRE CONSTRAINT ---
+                        if (useGenreCohesion) {
+                            // Determine Track Genre
+                            let gRaw = t['Genres'] || t['Artist Genres'] || t['Genre'] || "";
+                            let tGenre = getAggregatedGenre(gRaw);
+
+                            if (playlist.length === 0) {
+                                // First track: no penalty, just set precedence
+                            } else {
+                                // If we have a current genre running
+                                if (currentGenre) {
+                                    if (tGenre === currentGenre) {
+                                        // Same Genre:
+                                        if (genreStreak >= 4) {
+                                            // Forced Switch! Penalize Heavily
+                                            dist += 10.0;
+                                        } else {
+                                            // Encourage Continuation (Small Bonus)
+                                            dist -= 0.1;
+                                        }
+                                    } else {
+                                        // Different Genre:
+                                        if (genreStreak < 2) {
+                                            // Too soon to switch! Penalize
+                                            dist += 2.0;
+                                        } else {
+                                            // Good time to switch. No Penalty.
+                                        }
+                                    }
+                                }
+                            }
+                        }
 
                         if (dist < bestScore) {
                             bestScore = dist;
@@ -1040,7 +1089,20 @@
 
                     if (bestIdx !== -1) {
                         const track = pool[bestIdx];
-                        const tDur = track['Duration (ms)'] || 200000;
+                        const tDur = parseInt(track['Duration (ms)']) || 200000;
+
+                        // Update Streak Logic
+                        if (useGenreCohesion) {
+                            let gRaw = track['Genres'] || track['Artist Genres'] || track['Genre'] || "";
+                            let tGenre = getAggregatedGenre(gRaw);
+
+                            if (tGenre === currentGenre) {
+                                genreStreak++;
+                            } else {
+                                currentGenre = tGenre;
+                                genreStreak = 1;
+                            }
+                        }
 
                         playlist.push(track);
                         pool.splice(bestIdx, 1);
@@ -1068,6 +1130,7 @@
                 <th>Titre</th>
                 <th>Artiste</th>
                 <th>Durée</th>
+                <th>Genre</th>
                 <th>BPM</th>
                 <th>Energy</th>
                 <th>Dance</th>
@@ -1095,6 +1158,10 @@
                 const durSec = Math.floor((durMs % 60000) / 1000);
                 const durStr = `${durMin}:${durSec.toString().padStart(2, '0')}`;
 
+                // Genre
+                let gRaw = t['Genres'] || t['Artist Genres'] || t['Genre'] || "";
+                let genreDisplay = getAggregatedGenre(gRaw);
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${i + 1}</td>
@@ -1102,6 +1169,7 @@
                     <td>${t['Track Name'] || '???'}</td>
                     <td>${t['Artist Name(s)'] || ''}</td>
                     <td>${durStr}</td>
+                    <td>${genreDisplay}</td>
                     <td>${t.BPM || t.Tempo || ''}</td>
                     <td>${parseFloat(t.Energy).toFixed(2)}</td>
                     <td>${parseFloat(t.Danceability).toFixed(2)}</td>
@@ -1113,10 +1181,6 @@
             });
 
             document.getElementById('downloadBtn').onclick = function () {
-                // Add computed Time column to CSV export?
-                // Currently just re-exports raw data mostly.
-                // Let's stick to simple export for now or user might complain about format change.
-                // But user asked for visualization.
                 const csv = Papa.unparse(tracks);
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);

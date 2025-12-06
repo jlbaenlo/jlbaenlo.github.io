@@ -354,8 +354,104 @@
 
     </div>
 
+    <!-- CUSTOM MODAL -->
+    <div id="appModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3 id="modalTitle">Titre</h3>
+            <p id="modalDesc">Description</p>
+
+            <!-- Input container -->
+            <div id="modalInputContainer" class="hidden">
+                <input type="text" id="modalInput"
+                    style="width: 100%; padding: 10px; font-size: 16px; border: 1px solid #ddd; border-radius: 4px; margin: 10px 0;">
+            </div>
+
+            <!-- Actions -->
+            <div class="modal-actions"
+                style="margin-top: 20px; text-align: right; display: flex; gap: 10px; justify-content: flex-end;">
+                <button id="modalCancelBtn" class="btn btn-secondary">Annuler</button>
+                <button id="modalConfirmBtn" class="btn">Valider</button>
+            </div>
+        </div>
+    </div>
+
+    <style>
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            width: 90%;
+            max-width: 400px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .modal-overlay.hidden {
+            display: none;
+        }
+    </style>
+
     <!-- MAIN SCRIPT -->
     <script>
+        // --- MODAL HELPERS ---
+        const modal = document.getElementById('appModal');
+        const mTitle = document.getElementById('modalTitle');
+        const mDesc = document.getElementById('modalDesc');
+        const mInputDiv = document.getElementById('modalInputContainer');
+        const mInput = document.getElementById('modalInput');
+        const mConfirm = document.getElementById('modalConfirmBtn');
+        const mCancel = document.getElementById('modalCancelBtn');
+
+        function showInputModal(title, msg, defaultValue) {
+            return new Promise((resolve) => {
+                mTitle.textContent = title;
+                mDesc.textContent = msg;
+                mInput.value = defaultValue;
+                mInputDiv.classList.remove('hidden');
+                let mWaitResolve = resolve; // Renamed to avoid conflict if this was global
+
+                mInput.focus();
+                mConfirm.textContent = "Valider";
+                mCancel.classList.remove('hidden');
+                mCancel.onclick = () => { closeModal(); mWaitResolve(null); };
+                mConfirm.onclick = () => { closeModal(); mWaitResolve(mInput.value); };
+
+                modal.classList.remove('hidden');
+            });
+        }
+
+        function showSuccessModal(title, msg, linkUrl) {
+            mTitle.textContent = title;
+            mDesc.innerHTML = msg; // Allows HTML links
+            mInputDiv.classList.add('hidden');
+
+            mCancel.classList.add('hidden');
+            mConfirm.textContent = "Ouvrir Spotify ↗️";
+            mConfirm.onclick = () => {
+                closeModal();
+                if (linkUrl) window.open(linkUrl, '_blank');
+            };
+
+            modal.classList.remove('hidden');
+        }
+
+        function closeModal() {
+            modal.classList.add('hidden');
+        }
+
         // --- UTILS ---
         const debugLog = document.getElementById('debug-log');
         function log(msg) {
@@ -369,7 +465,7 @@
         const CLIENT_ID_STORAGE_KEY = 'spotify_client_id';
         const ACCESS_TOKEN_KEY = 'spotify_access_token';
         const STATE_KEY = 'spotify_auth_state';
-        const DEFAULT_CLIENT_ID = 'e37b29847db846ebbc8c6bfca9820c8d'; // Provided by User
+        const DEFAULT_CLIENT_ID = 'e37b29847db846ebbc8c6bfca9820c8d';
 
         // --- PKCE HELPERS ---
         function generateRandomString(length) {
@@ -398,9 +494,10 @@
         async function handleSpotifyExport(playlistTracks) {
             log("Initiating Spotify Export (PKCE)...");
 
-            // 1. Prompt for Name FIRST
+            // 1. Prompt for Name FIRST (Using Custom Modal)
             const defaultName = `My Flow - ${new Date().toLocaleDateString()}`;
-            const playlistName = prompt("Nom de votre Playlist Spotify :", defaultName);
+            const playlistName = await showInputModal("Export Spotify", "Nom de votre Playlist :", defaultName);
+
             if (!playlistName) {
                 log("Export annulé par l'utilisateur.");
                 return;
@@ -415,7 +512,7 @@
                 log("Redirecting to Spotify Auth (PKCE)...");
 
                 let clientId = DEFAULT_CLIENT_ID;
-                const redirectUri = window.location.href.split('#')[0].split('?')[0]; // Clean URI
+                const redirectUri = window.location.href.split('#')[0].split('?')[0];
 
                 // Generate PKCE Verifier & Challenge
                 const codeVerifier = generateRandomString(128);
@@ -466,17 +563,16 @@
                 const playlistId = playlistData.id;
 
                 // Add Tracks
-                // Extract URIs
                 const uris = playlistTracks
                     .map(t => t['Track URI'])
                     .filter(uri => uri && uri.startsWith('spotify:track:'));
 
                 if (uris.length === 0) {
-                    alert("Aucun URI Spotify trouvé dans les données (colonne 'Track URI' manquante ?).");
+                    alert("Aucun URI Spotify trouvé. Vérifiez votre CSV.");
                     return;
                 }
 
-                // Batch requests (Spotify limit 100 per request)
+                // Batch requests
                 for (let i = 0; i < uris.length; i += 100) {
                     const batch = uris.slice(i, i + 100);
                     await fetch(`https://api.spotify.com/v1/playlists/${playlistId}/tracks`, {
@@ -486,22 +582,21 @@
                     });
                 }
 
-                // Success Handling
+                // Success Handling (Custom Modal)
                 log(`Playlist "${playlistName}" created!`);
-
-                // 1. Show Link in UI (Fallback)
                 const resultSummary = document.getElementById('result-summary');
                 resultSummary.innerHTML = `✅ Playlist <b>"${playlistName}"</b> créée ! <a href="${playlistData.external_urls.spotify}" target="_blank" style="color:#1DB954; font-weight:bold;">Ouvrir sur Spotify ↗️</a><br>` + resultSummary.innerHTML;
 
-                // 2. Try to Open
-                if (confirm(`Playlist "${playlistName}" créée avec succès !\n\nVoulez-vous l'ouvrir sur Spotify maintenant ?`)) {
-                    window.open(playlistData.external_urls.spotify, '_blank');
-                }
+                showSuccessModal(
+                    "C'est fait ! 🎉",
+                    `La playlist <b>"${playlistName}"</b> a été ajoutée à votre bibliothèque.`,
+                    playlistData.external_urls.spotify
+                );
 
             } catch (e) {
                 log("Spotify API Error: " + e.message);
                 console.error(e);
-                alert("Erreur lors de l'export Spotify: " + e.message);
+                alert("Erreur: " + e.message);
             }
         }
 

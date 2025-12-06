@@ -631,6 +631,11 @@
 
         canvas.addEventListener('mouseup', () => { isDragging = false; dragTarget = null; });
 
+        // --- RESIZE HANDLER ---
+        window.addEventListener('resize', () => {
+            if (phases.length > 0) initGraph();
+        });
+
 
         // --- STEP 3: GENERATION (Duration Based) ---
         document.getElementById('generateBtn').addEventListener('click', function () {

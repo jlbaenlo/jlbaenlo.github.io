@@ -590,28 +590,37 @@
         let isDragging = false;
         let dragTarget = null; // { type: 'point'|'separator', index: 0, prop: 'energy' }
 
-        // Presets
+        // Presets - values based on DJ industry standards & Spotify Audio Analysis
         const PRESETS = {
             custom: () => [],
             party: (n) => [
-                { name: "Warm-up", d: 0.15, e: 0.3, da: 0.4, v: 0.5, t: 0.3 },
-                { name: "Build-up", d: 0.20, e: 0.6, da: 0.6, v: 0.6, t: 0.5 },
-                { name: "Peak 1", d: 0.20, e: 0.9, da: 0.9, v: 0.8, t: 0.7 },
-                { name: "Peak 2", d: 0.25, e: 0.85, da: 0.85, v: 0.9, t: 0.7 },
-                { name: "Cool Down", d: 0.20, e: 0.4, da: 0.5, v: 0.5, t: 0.4 }
+                // Warm-up: Mod-Low Energy, Building Tempo
+                { name: "Warm-up", d: 0.15, e: 0.45, da: 0.55, v: 0.60, t: 0.30 },
+                // Build-up: Increasing Intensity
+                { name: "Build-up", d: 0.20, e: 0.65, da: 0.70, v: 0.70, t: 0.50 },
+                // Peak Time: High Energy, Max Danceability, High Happiness
+                { name: "Peak 1", d: 0.20, e: 0.90, da: 0.90, v: 0.85, t: 0.80 },
+                { name: "Peak 2", d: 0.25, e: 0.85, da: 0.88, v: 0.90, t: 0.75 },
+                // Cool Down: Drop in Tempo & Energy
+                { name: "Cool Down", d: 0.20, e: 0.40, da: 0.50, v: 0.50, t: 0.25 }
             ],
             apero: (n) => [
-                { name: "Welcome", d: 0.2, e: 0.3, da: 0.4, v: 0.7, t: 0.3 },
-                { name: "Chill", d: 0.2, e: 0.4, da: 0.5, v: 0.8, t: 0.35 },
-                { name: "Lounge", d: 0.2, e: 0.4, da: 0.6, v: 0.8, t: 0.4 },
-                { name: "Groove", d: 0.2, e: 0.5, da: 0.7, v: 0.9, t: 0.45 },
-                { name: "Sunset", d: 0.2, e: 0.3, da: 0.4, v: 0.7, t: 0.3 }
+                // Lounge/Chill: Consistent Mellow Vibe (Low Energy, High Valence)
+                { name: "Welcome", d: 0.2, e: 0.35, da: 0.45, v: 0.75, t: 0.20 },
+                { name: "Chill", d: 0.2, e: 0.40, da: 0.50, v: 0.80, t: 0.25 },
+                { name: "Conversation", d: 0.2, e: 0.40, da: 0.55, v: 0.85, t: 0.30 },
+                { name: "Groove", d: 0.2, e: 0.50, da: 0.60, v: 0.90, t: 0.35 },
+                { name: "Sunset", d: 0.2, e: 0.30, da: 0.40, v: 0.70, t: 0.20 }
             ],
             sport: (n) => [
-                { name: "Warm-up", d: 0.1, e: 0.4, da: 0.4, v: 0.5, t: 0.4 },
-                { name: "High Intensity", d: 0.35, e: 0.95, da: 0.7, v: 0.7, t: 0.9 },
-                { name: "Endurance", d: 0.45, e: 0.8, da: 0.8, v: 0.8, t: 0.8 },
-                { name: "Recovery", d: 0.1, e: 0.3, da: 0.3, v: 0.5, t: 0.3 }
+                // HIIT/Cardio Structure
+                // Warm-up: 100-120 BPM
+                { name: "Warm-up", d: 0.15, e: 0.55, da: 0.60, v: 0.60, t: 0.40 },
+                // High Intensity: >0.8 Energy, Fast Tempo (140+)
+                { name: "High Intensity 1", d: 0.30, e: 0.95, da: 0.80, v: 0.75, t: 0.90 },
+                { name: "High Intensity 2", d: 0.30, e: 0.90, da: 0.85, v: 0.80, t: 0.95 },
+                // Recovery/Cool Down: Slow
+                { name: "Cool Down", d: 0.25, e: 0.40, da: 0.40, v: 0.50, t: 0.20 }
             ]
         };
 

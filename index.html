@@ -343,16 +343,33 @@
                 dynamicTyping: true,
                 skipEmptyLines: true,
                 complete: function (results) {
-                    rawTracks = results.data;
-                    document.getElementById('import-status').textContent = `✅ ${rawTracks.length} titres.`;
+                    try {
+                        if (!results.data || results.data.length === 0) throw new Error("File empty");
 
-                    // Show Next Steps
-                    document.getElementById('step-config').classList.remove('hidden');
-                    document.getElementById('stats-section').classList.remove('hidden');
+                        rawTracks = results.data;
+                        document.getElementById('import-status').textContent = `✅ ${rawTracks.length} titres.`;
 
-                    // Init Graph & Stats
-                    initGraph();
-                    calculateStats(rawTracks);
+                        // Show Next Steps
+                        document.getElementById('step-config').classList.remove('hidden');
+                        document.getElementById('stats-section').classList.remove('hidden');
+
+                        // Init App Logic
+                        log("Initializing Visualization...");
+                        // Ensure graph loads
+                        if (phases.length === 0) loadPreset();
+                        else draw();
+
+                        // Stats
+                        calculateStats(rawTracks);
+
+                    } catch (e) {
+                        log("Error after parse: " + e.message);
+                        console.error(e);
+                        alert("Erreur: " + e.message);
+                    }
+                },
+                error: function (err) {
+                    log("CSV Parsing Error: " + err.message);
                 }
             });
         });
@@ -362,89 +379,102 @@
         let criteriaChartInst = null;
 
         function calculateStats(tracks) {
-            // 1. Genre Distribution (Pie)
-            const genreCounts = {};
-            tracks.forEach(t => {
-                // Try to guess genre column content. usually 'Genres' or 'Artist Genres'
-                // Exportify standard: "Genres"
-                let g = "Unknown";
-                if (t.Genres && typeof t.Genres === 'string') {
-                    g = t.Genres.split(',')[0].trim(); // Take primary
-                }
-                if (!g || g === "") g = "Unknown";
+            if (typeof Chart === 'undefined') {
+                log("Chart.js missing - Skipping Stats Charts");
+                document.getElementById('stats-section').innerHTML += "<p style='color:red'>Erreur: Chart.js introuvable.</p>";
+                return;
+            }
 
-                genreCounts[g] = (genreCounts[g] || 0) + 1;
-            });
+            try {
+                // 1. Genre Distribution (Pie)
+                const genreCounts = {};
+                tracks.forEach(t => {
+                    let g = "Unknown";
+                    // Robust check for different CSV formats
+                    if (t['Genres']) g = t['Genres'];
+                    else if (t['Artist Genres']) g = t['Artist Genres'];
+                    else if (t['Genre']) g = t['Genre'];
 
-            // Sort and Top 10
-            const sortedGenres = Object.entries(genreCounts)
-                .sort((a, b) => b[1] - a[1])
-                .slice(0, 10);
-
-            const genreLabels = sortedGenres.map(x => x[0]);
-            const genreData = sortedGenres.map(x => x[1]);
-
-            // Render Genre Chart
-            const ctxG = document.getElementById('genreChart').getContext('2d');
-            if (genreChartInst) genreChartInst.destroy();
-            genreChartInst = new Chart(ctxG, {
-                type: 'pie',
-                data: {
-                    labels: genreLabels,
-                    datasets: [{
-                        data: genreData,
-                        backgroundColor: [
-                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-                            '#FF9F40', '#E7E9ED', '#76A346', '#800080', '#000080'
-                        ]
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: 'Top 10 Genres' },
-                        legend: { position: 'right' }
+                    if (typeof g === 'string') {
+                        g = g.split(',')[0].trim();
+                    } else {
+                        g = "Unknown";
                     }
+
+                    if (!g || g === "") g = "Unknown";
+                    genreCounts[g] = (genreCounts[g] || 0) + 1;
+                });
+
+                const sortedGenres = Object.entries(genreCounts)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10);
+
+                const ctxG = document.getElementById('genreChart');
+                if (ctxG) {
+                    if (genreChartInst) genreChartInst.destroy();
+                    genreChartInst = new Chart(ctxG.getContext('2d'), {
+                        type: 'pie',
+                        data: {
+                            labels: sortedGenres.map(x => x[0]),
+                            datasets: [{
+                                data: sortedGenres.map(x => x[1]),
+                                backgroundColor: [
+                                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                                    '#FF9F40', '#E7E9ED', '#76A346', '#800080', '#000080'
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: { display: true, text: 'Top 10 Genres' },
+                                legend: { position: 'right' }
+                            }
+                        }
+                    });
                 }
-            });
 
-            // 2. Criteria Distribution (Bar)
-            // Buckets: 0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8, 0.8-1.0
-            const buckets = {
-                energy: [0, 0, 0, 0, 0],
-                dance: [0, 0, 0, 0, 0],
-                valence: [0, 0, 0, 0, 0],
-                tempo: [0, 0, 0] // 60-90, 90-120, 120+ (Different logic)
-            };
+                // 2. Criteria Distribution (Bar)
+                const buckets = {
+                    energy: [0, 0, 0, 0, 0],
+                    dance: [0, 0, 0, 0, 0],
+                    valence: [0, 0, 0, 0, 0]
+                };
 
-            tracks.forEach(t => {
-                const bucketIdx = (val) => Math.min(4, Math.floor(val * 5));
-                if (t.Energy) buckets.energy[bucketIdx(t.Energy)]++;
-                if (t.Danceability) buckets.dance[bucketIdx(t.Danceability)]++;
-                if (t.Valence) buckets.valence[bucketIdx(t.Valence)]++;
-            });
+                tracks.forEach(t => {
+                    const bucketIdx = (val) => Math.min(4, Math.floor((parseFloat(val) || 0) * 5));
+                    if (t.Energy !== undefined) buckets.energy[bucketIdx(t.Energy)]++;
+                    if (t.Danceability !== undefined) buckets.dance[bucketIdx(t.Danceability)]++;
+                    if (t.Valence !== undefined) buckets.valence[bucketIdx(t.Valence)]++;
+                });
 
-            const ctxC = document.getElementById('criteriaChart').getContext('2d');
-            if (criteriaChartInst) criteriaChartInst.destroy();
-            criteriaChartInst = new Chart(ctxC, {
-                type: 'bar',
-                data: {
-                    labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
-                    datasets: [
-                        { label: 'Energy', data: buckets.energy, backgroundColor: 'rgba(255, 99, 132, 0.7)' },
-                        { label: 'Dance', data: buckets.dance, backgroundColor: 'rgba(54, 162, 235, 0.7)' },
-                        { label: 'Valence', data: buckets.valence, backgroundColor: 'rgba(75, 192, 192, 0.7)' }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        title: { display: true, text: 'Critères Distribution' }
-                    }
+                const ctxC = document.getElementById('criteriaChart');
+                if (ctxC) {
+                    if (criteriaChartInst) criteriaChartInst.destroy();
+                    criteriaChartInst = new Chart(ctxC.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
+                            datasets: [
+                                { label: 'Energy', data: buckets.energy, backgroundColor: 'rgba(255, 99, 132, 0.7)' },
+                                { label: 'Dance', data: buckets.dance, backgroundColor: 'rgba(54, 162, 235, 0.7)' },
+                                { label: 'Valence', data: buckets.valence, backgroundColor: 'rgba(75, 192, 192, 0.7)' }
+                            ]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                title: { display: true, text: 'Critères Distribution' }
+                            }
+                        }
+                    });
                 }
-            });
+            } catch (e) {
+                log("Stats Error: " + e.message);
+                console.error(e);
+            }
         }
 
         // --- STEP 2: ADVANCED GRAPH ---

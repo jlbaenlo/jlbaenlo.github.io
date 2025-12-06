@@ -355,6 +355,10 @@
 
                         // Init App Logic
                         log("Initializing Visualization...");
+
+                        // Normalization
+                        normalizeTracks(rawTracks);
+
                         // Ensure graph loads
                         if (phases.length === 0) loadPreset();
                         else draw();
@@ -373,6 +377,53 @@
                 }
             });
         });
+
+        function normalizeTracks(tracks) {
+            log("Normalizing data ranges...");
+
+            // 1. Detect Scale for basic metrics (Energy, Dance, Valence)
+            // Some exports use 0-1, others 0-100.
+            let maxEnergy = 0;
+            let minBPM = Infinity;
+            let maxBPM = -Infinity;
+
+            tracks.forEach(t => {
+                if (t.Energy > maxEnergy) maxEnergy = t.Energy;
+
+                const bpm = parseFloat(t.BPM || t.Tempo) || 0;
+                if (bpm > 0) {
+                    if (bpm < minBPM) minBPM = bpm;
+                    if (bpm > maxBPM) maxBPM = bpm;
+                }
+            });
+
+            const isScale100 = maxEnergy > 1.0;
+            // Safety for BPM
+            if (minBPM === Infinity) { minBPM = 60; maxBPM = 180; }
+            if (minBPM === maxBPM) { minBPM = 0; maxBPM = 200; } // avoid div/0
+
+            tracks.forEach(t => {
+                // Normalize Metrics to 0-1
+                const e = parseFloat(t.Energy) || 0;
+                const d = parseFloat(t.Danceability) || 0;
+                const v = parseFloat(t.Valence) || 0;
+
+                t._nEnergy = isScale100 ? e / 100 : e;
+                t._nDance = isScale100 ? d / 100 : d;
+                t._nValence = isScale100 ? v / 100 : v;
+
+                // Normalize BPM Relative to Playlist Range
+                // 0 on graph = slowest song in playlist
+                // 1 on graph = fastest song in playlist
+                const bpm = parseFloat(t.BPM || t.Tempo) || minBPM;
+                let normBPM = (bpm - minBPM) / (maxBPM - minBPM);
+                normBPM = Math.max(0, Math.min(1, normBPM)); // Clamp
+
+                t._nTempo = normBPM;
+            });
+
+            log(`Normalization Done. Scale=${isScale100 ? '0-100' : '0-1'}. BPM Range=${minBPM}-${maxBPM}`);
+        }
 
         // --- STATS LOGIC ---
         let genreChartInst = null;
@@ -936,12 +987,12 @@
 
                     for (let k = 0; k < pool.length; k++) {
                         const t = pool[k];
-                        const tE = parseFloat(t.Energy) || 0.5;
-                        const tD = parseFloat(t.Danceability) || 0.5;
-                        const tV = parseFloat(t.Valence) || 0.5;
-                        // Tempo Normalization: Assume 60-180 BPM range
-                        const tBPM = parseFloat(t.BPM || t.Tempo) || 120;
-                        const tT = Math.max(0, Math.min(1, (tBPM - 60) / 120));
+
+                        // Use Normalized values (_n) calculated on import
+                        const tE = t._nEnergy !== undefined ? t._nEnergy : (parseFloat(t.Energy) || 0.5);
+                        const tD = t._nDance !== undefined ? t._nDance : (parseFloat(t.Danceability) || 0.5);
+                        const tV = t._nValence !== undefined ? t._nValence : (parseFloat(t.Valence) || 0.5);
+                        const tT = t._nTempo !== undefined ? t._nTempo : 0.5;
 
                         // Euclidean Distance (Weighted equal)
                         const dist = Math.sqrt(

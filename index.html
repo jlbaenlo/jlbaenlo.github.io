@@ -378,6 +378,25 @@
         let genreChartInst = null;
         let criteriaChartInst = null;
 
+        // Helper for genre aggregation (Ensure this is available)
+        function getAggregatedGenre(genreString) {
+            if (!genreString) return "Unknown";
+            const g = genreString.toLowerCase();
+
+            if (g.match(/hip hop|rap|trap|drill|grime/)) return "Hip Hop / Rap";
+            if (g.match(/house|techno|trance|edm|dance|electro|disco|club/)) return "Electronic / Dance";
+            if (g.match(/pop|charts|top/)) return "Pop";
+            if (g.match(/rock|metal|punk|indie|grunge/)) return "Rock / Indie";
+            if (g.match(/r&b|soul|funk|motown|neo/)) return "R&B / Soul";
+            if (g.match(/jazz|blues|swing/)) return "Jazz / Blues";
+            if (g.match(/latin|reggaeton|salsa|bachata/)) return "Latin";
+            if (g.match(/reggae|dancehall|dub/)) return "Reggae";
+            if (g.match(/classical|orchestra|piano/)) return "Classical";
+            if (g.match(/country|folk|acoustic/)) return "Folk / Country";
+
+            return "Autre";
+        }
+
         function calculateStats(tracks) {
             if (typeof Chart === 'undefined') {
                 log("Chart.js missing - Skipping Stats Charts");
@@ -389,25 +408,19 @@
                 // 1. Genre Distribution (Pie)
                 const genreCounts = {};
                 tracks.forEach(t => {
-                    let g = "Unknown";
+                    let gRaw = "Unknown";
                     // Robust check for different CSV formats
-                    if (t['Genres']) g = t['Genres'];
-                    else if (t['Artist Genres']) g = t['Artist Genres'];
-                    else if (t['Genre']) g = t['Genre'];
+                    if (t['Genres']) gRaw = t['Genres'];
+                    else if (t['Artist Genres']) gRaw = t['Artist Genres'];
+                    else if (t['Genre']) gRaw = t['Genre'];
 
-                    if (typeof g === 'string') {
-                        g = g.split(',')[0].trim();
-                    } else {
-                        g = "Unknown";
-                    }
-
-                    if (!g || g === "") g = "Unknown";
+                    // Use Aggregation
+                    const g = getAggregatedGenre(gRaw);
                     genreCounts[g] = (genreCounts[g] || 0) + 1;
                 });
 
                 const sortedGenres = Object.entries(genreCounts)
-                    .sort((a, b) => b[1] - a[1])
-                    .slice(0, 10);
+                    .sort((a, b) => b[1] - a[1]);
 
                 const ctxG = document.getElementById('genreChart');
                 if (ctxG) {
@@ -428,7 +441,7 @@
                             responsive: true,
                             maintainAspectRatio: false,
                             plugins: {
-                                title: { display: true, text: 'Top 10 Genres' },
+                                title: { display: true, text: 'Genres (Aggregated)' },
                                 legend: { position: 'right' }
                             }
                         }

@@ -173,24 +173,55 @@
         <!-- STEP 2: CONFIG & GRAPH -->
         <div id="step-config" class="step hidden">
             <h2>2. Design Your Flow 🌊</h2>
-            <div style="display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap;">
-                <div>
-                    <label>Phases:</label>
-                    <input type="number" id="numPhases" value="5" min="3" max="10" style="padding: 5px;">
-                </div>
-                <div>
+
+            <div style="background: #eee; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div style="display: flex; gap: 20px; align-items: flex-end; flex-wrap: wrap;">
+                    <!-- Time Controls -->
+                    <div>
+                        <label style="font-size:12px; font-weight:bold;">Début</label><br>
+                        <input type="time" id="startTime" value="21:00"
+                            style="padding: 5px; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div>
+                        <label style="font-size:12px; font-weight:bold;">Fin</label><br>
+                        <input type="time" id="endTime" value="23:00"
+                            style="padding: 5px; border:1px solid #ccc; border-radius:4px;">
+                    </div>
+                    <div style="font-size: 14px; font-weight: bold; color: var(--spotify-green); padding-bottom: 5px;">
+                        Durée: <span id="totalDurationLabel">2h 00m</span>
+                    </div>
+
+                    <!-- Preset Selector -->
+                    <div style="margin-left: auto;">
+                        <label style="font-size:12px; font-weight:bold;">Mode</label><br>
+                        <select id="flowMode" style="padding: 6px; border-radius:4px; min-width: 120px;">
+                            <option value="custom">🛠️ Custom</option>
+                            <option value="party" selected>🎉 Party (Standard)</option>
+                            <option value="apero">🍷 Apéro (Chill)</option>
+                            <option value="sport">💪 Sport (Intensity)</option>
+                        </select>
+                    </div>
+
+                    <div>
+                        <label style="font-size:12px; font-weight:bold;">Phases</label><br>
+                        <input type="number" id="numPhases" value="5" min="2" max="10"
+                            style="width: 50px; padding: 5px;">
+                    </div>
+
                     <button id="resetGraphBtn" class="btn btn-secondary"
-                        style="padding: 6px 12px; font-size: 14px;">Réinitialiser Graph</button>
+                        style="padding: 6px 12px; font-size: 12px;">Reset</button>
                 </div>
             </div>
 
-            <p class="small">Glissez les points pour ajuster :
-                <span style="color:rgba(255, 99, 132, 1)">● Energy</span>,
-                <span style="color:rgba(54, 162, 235, 1)">● Danceability</span>
+            <p class="small" style="margin-bottom: 5px;">
+                🖱️ <b>Drag</b> les points pour l'intensité. ↔️ <b>Drag</b> les lignes verticales pour changer la durée.
             </p>
-
             <div class="graph-container">
                 <canvas id="flowChart"></canvas>
+            </div>
+            <div style="display: flex; justify-content: center; gap: 15px; font-size: 13px; margin-top: 5px;">
+                <span style="color:rgba(255, 99, 132, 1)">● Energy</span>
+                <span style="color:rgba(54, 162, 235, 1)">● Danceability</span>
             </div>
 
             <div style="text-align: center; margin-top: 30px;">

@@ -366,111 +366,125 @@
             ]
         };
 
-        function initGraph() {
-            canvas.width = canvas.parentElement.clientWidth;
-            canvas.height = canvas.parentElement.clientHeight;
+        // --- GRAPH STATE MANAGEMENT ---
 
+        function loadPreset() {
             const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
             const mode = document.getElementById('flowMode').value;
 
-            // Capture existing state if we are just resizing (and not force resetting via mode switch or button)
-            // But here initGraph is called on both. We need to know if it's a "reset" or "resize".
-            // Since this function is the listener for 'numPhases', let's check if we have data to interpolate.
+            // If custom, do nothing or just init empty
+            if (mode === 'custom') {
+                resizeGraph();
+                return;
+            }
 
-            let sourcePhases = [];
+            const presetFunc = PRESETS[mode] || PRESETS.party;
+            const presetData = presetFunc(numPhases);
 
-            // Logic: 
-            // 1. If mode changed -> Load Preset
-            // 2. If just numPhases changed and we have data -> Interpolate
-
-            // Current simplified approach:
-
-            if (mode !== 'custom' && PRESETS[mode]) {
-                // If it is a preset, we get the preset standard definition
-                const presetData = PRESETS[mode](numPhases);
-
-                // If the preset return exact match (e.g. static array), we use it. 
-                // If it returns a different length (e.g. Party is 5 but user wants 8), we Interpolate!
-                sourcePhases = presetData.map(p => ({
-                    durationPercent: p.d, energy: p.e, dance: p.da, valence: p.v || 0.5, tempo: p.t || 0.5, name: p.name
+            // Map preset to phases
+            if (presetData.length === numPhases) {
+                // Exact match
+                phases = presetData.map(p => ({
+                    name: p.name, durationPercent: p.d, energy: p.e, dance: p.da, valence: p.v || 0.5, tempo: p.t || 0.5
                 }));
-            } else if (phases.length > 0) {
-                // Custom Mode or existing data: Use current phases as source for interpolation
-                sourcePhases = phases;
             } else {
-                // Cold start fallback
-                sourcePhases = [];
-                for (let i = 0; i < 5; i++) sourcePhases.push({ durationPercent: 0.2, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5 });
+                // Mismatch length? Initial interpolation from preset source
+                interpolateFromSource(presetData.map(p => ({
+                    name: p.name, durationPercent: p.d, energy: p.e, dance: p.da, valence: p.v || 0.5, tempo: p.t || 0.5
+                })), numPhases);
             }
 
-            // Now, map `sourcePhases` (Length A) to `phases` (Length B [numPhases])
-            if (sourcePhases.length === numPhases) {
-                phases = JSON.parse(JSON.stringify(sourcePhases)); // Deep Copy
-            } else {
-                phases = [];
-                // Interpolation Logic
-                for (let i = 0; i < numPhases; i++) {
-                    const progress = i / (numPhases - 1); // 0 to 1 position of new point
-
-                    // Find corresponding position in source
-                    // We map total duration or just index? Let's map by Index for simplicity in this V1
-                    // (Mapping by duration is better but complex if durations are uneven)
-                    // Simple Linear Interpolation between indices
-
-                    const sourcePos = progress * (sourcePhases.length - 1);
-                    const idxA = Math.floor(sourcePos);
-                    const idxB = Math.min(sourcePhases.length - 1, Math.ceil(sourcePos));
-                    const t = sourcePos - idxA;
-
-                    const pA = sourcePhases[idxA];
-                    const pB = sourcePhases[idxB];
-
-                    phases.push({
-                        name: pA.name || `Phase ${i + 1}`,
-                        durationPercent: 1 / numPhases, // Reset duration to equal split on resize? Or try to keep? Equal is safer.
-                        energy: lerp(pA.energy, pB.energy, t),
-                        dance: lerp(pA.dance, pB.dance, t),
-                        valence: lerp(pA.valence || 0.5, pB.valence || 0.5, t),
-                        tempo: lerp(pA.tempo || 0.5, pB.tempo || 0.5, t)
-                    });
-                }
-            }
-
-            // Normalize Duration just in case
             normalizeDurations();
             draw();
         }
 
+        function resizeGraph() {
+            const numPhases = parseInt(document.getElementById('numPhases').value) || 5;
+
+            if (phases.length === 0) {
+                // Cold start
+                loadPreset();
+                return;
+            }
+
+            if (phases.length === numPhases) return; // No change
+
+            // Extrapolate/Interpolate from CURRENT phases
+            interpolateFromSource(phases, numPhases);
+
+            normalizeDurations();
+            draw();
+        }
+
+        function interpolateFromSource(source, targetCount) {
+            const newPhases = [];
+            for (let i = 0; i < targetCount; i++) {
+                const progress = i / (targetCount - 1);
+
+                // Map to source index
+                const sourcePos = progress * (source.length - 1);
+                const idxA = Math.floor(sourcePos);
+                const idxB = Math.min(source.length - 1, Math.ceil(sourcePos));
+                const t = sourcePos - idxA;
+
+                const pA = source[idxA];
+                const pB = source[idxB];
+
+                newPhases.push({
+                    name: pA.name || `Phase ${i + 1}`,
+                    durationPercent: 1 / targetCount,
+                    energy: lerp(pA.energy, pB.energy, t),
+                    dance: lerp(pA.dance, pB.dance, t),
+                    valence: lerp(pA.valence || 0.5, pB.valence || 0.5, t),
+                    tempo: lerp(pA.tempo || 0.5, pB.tempo || 0.5, t)
+                });
+            }
+            phases = newPhases;
+        }
+
         function lerp(a, b, t) { return a + (b - a) * t; }
-
-        document.getElementById('resetGraphBtn').onclick = initGraph;
-        document.getElementById('numPhases').onchange = initGraph;
-        document.getElementById('flowMode').onchange = function () {
-            // Update numPhases if preset implies it? No, keep user control or hint?
-            // For now just re-init
-            if (this.value === 'party') document.getElementById('numPhases').value = 5;
-            if (this.value === 'sport') document.getElementById('numPhases').value = 4;
-            initGraph();
-        };
-
         function normalizeDurations() {
             const total = phases.reduce((acc, p) => acc + p.durationPercent, 0);
             phases.forEach(p => p.durationPercent /= total);
         }
 
+        // Binds
+        document.getElementById('resetGraphBtn').onclick = loadPreset;
+        document.getElementById('flowMode').onchange = loadPreset;
+        document.getElementById('numPhases').onchange = resizeGraph;
+
+        // Initial Call
+        setTimeout(loadPreset, 100);
+
+        // --- DRAWING ---
+
         function draw() {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const w = canvas.width;
             const h = canvas.height;
-            const padding = 40; // Increased padding for labels
+            const padding = 40;
+            const leftPadding = 35; // Space for Y axis
 
-            // Background Grid
+            // Background Grid & Y-Axis Labels
             ctx.strokeStyle = '#f0f0f0';
+            ctx.fillStyle = '#999';
+            ctx.textAlign = 'right';
+            ctx.font = '10px monospace';
+
             ctx.beginPath();
             for (let i = 0; i <= 4; i++) {
-                let y = i * (h - padding) / 4;
-                ctx.moveTo(0, y);
+                // 0% at Bottom, 100% at Top
+                const val = 100 - (i * 25);
+                const y = i * (h - padding) / 4;
+
+                ctx.moveTo(leftPadding, y);
                 ctx.lineTo(w, y);
+
+                // Label
+                ctx.fillText(val + "%", leftPadding - 5, y + 3);
             }
             ctx.stroke();
 
@@ -479,8 +493,9 @@
             const phaseMeta = [];
 
             phases.forEach((p, i) => {
-                const startX = currentXPct * w;
-                const phaseW = p.durationPercent * w;
+                const startX = leftPadding + (currentXPct * (w - leftPadding)); // Offset by leftPadding
+                const phasesWidthTotal = w - leftPadding;
+                const phaseW = p.durationPercent * phasesWidthTotal;
                 const centerX = startX + (phaseW / 2);
 
                 phaseMeta.push({
@@ -492,10 +507,14 @@
                     centerY_D: (1 - p.dance) * (h - padding),
                     centerY_V: (1 - p.valence) * (h - padding),
                     centerY_T: (1 - p.tempo) * (h - padding),
+                    val_E: p.energy,
+                    val_D: p.dance,
+                    val_V: p.valence,
+                    val_T: p.tempo,
                     name: p.name
                 });
 
-                // Draw Separator (if not last)
+                // Draw Separator
                 if (i < phases.length - 1) {
                     ctx.beginPath();
                     ctx.strokeStyle = '#ccc';
@@ -505,7 +524,7 @@
                     ctx.stroke();
                     ctx.setLineDash([]);
 
-                    // Separator Handle
+                    // Handle
                     ctx.fillStyle = '#ddd';
                     ctx.fillRect(startX + phaseW - 3, h / 2 - 10, 6, 20);
                 }
@@ -516,21 +535,20 @@
             canvas.phaseMeta = phaseMeta;
 
             // Draw Lines & Points
-            drawCurve(phaseMeta, 'energy', 'centerY_E', 'rgba(255, 99, 132, 1)');
-            drawCurve(phaseMeta, 'dance', 'centerY_D', 'rgba(54, 162, 235, 1)');
-            drawCurve(phaseMeta, 'valence', 'centerY_V', 'rgba(75, 192, 192, 1)');
-            drawCurve(phaseMeta, 'tempo', 'centerY_T', 'rgba(255, 206, 86, 1)');
+            drawCurve(phaseMeta, 'energy', 'centerY_E', 'val_E', 'rgba(255, 99, 132, 1)');
+            drawCurve(phaseMeta, 'dance', 'centerY_D', 'val_D', 'rgba(54, 162, 235, 1)');
+            drawCurve(phaseMeta, 'valence', 'centerY_V', 'val_V', 'rgba(75, 192, 192, 1)');
+            drawCurve(phaseMeta, 'tempo', 'centerY_T', 'val_T', 'rgba(255, 206, 86, 1)');
 
-            // Draw Time & Name Labels
+            // X-Axis Labels
             ctx.textAlign = 'center';
-
-            // Start Time
-            ctx.font = '10px monospace';
             ctx.fillStyle = '#999';
-            ctx.fillText(document.getElementById('startTime').value, 0 + 25, h - 5);
+
+            // Start/End
+            ctx.fillText(document.getElementById('startTime').value, leftPadding + 20, h - 5);
             ctx.fillText(document.getElementById('endTime').value, w - 25, h - 5);
 
-            // Phase Times & Names
+            // Phase Names & Middle Times
             let timeAccum = 0;
             const [sh, sm] = document.getElementById('startTime').value.split(':').map(Number);
             const refStartMin = sh * 60 + sm;
@@ -538,8 +556,8 @@
             phases.forEach((p, i) => {
                 const meta = phaseMeta[i];
 
-                // Phase Name
-                ctx.font = 'bold 12px sans-serif';
+                // Name
+                ctx.font = 'bold 11px sans-serif';
                 ctx.fillStyle = '#333';
                 ctx.fillText(p.name || `P${i + 1}`, meta.centerX, h - 20);
 
@@ -559,7 +577,7 @@
             });
         }
 
-        function drawCurve(meta, prop, yProp, color) {
+        function drawCurve(meta, prop, yProp, valProp, color) {
             ctx.beginPath();
             ctx.strokeStyle = color;
             ctx.lineWidth = 3;
@@ -569,36 +587,41 @@
 
             if (points.length > 0) {
                 ctx.moveTo(points[0].x, points[0].y);
-
                 for (let i = 0; i < points.length - 1; i++) {
                     const curr = points[i];
                     const next = points[i + 1];
-
-                    // Calculate control points for smoothing (simple sigmoid approach)
-                    // This creates a nice "S" curve between phases which feels natural for flow
                     const cp1x = curr.x + (next.x - curr.x) / 2;
                     const cp1y = curr.y;
                     const cp2x = curr.x + (next.x - curr.x) / 2;
                     const cp2y = next.y;
-
                     ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
                 }
             }
-
             ctx.stroke();
 
-            // Points
+            // Points & Data Labels
             meta.forEach(m => {
                 const x = m.centerX;
                 const y = m[yProp];
+                const val = m[valProp];
 
+                // Point
                 ctx.beginPath();
-                ctx.arc(x, y, 6, 0, Math.PI * 2);
+                ctx.arc(x, y, 5, 0, Math.PI * 2);
                 ctx.fillStyle = 'white';
                 ctx.fill();
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.stroke();
+
+                // Label (Background)
+                ctx.fillStyle = 'rgba(255,255,255,0.7)';
+                ctx.fillRect(x - 10, y - 22, 20, 12);
+
+                // Label (Text)
+                ctx.fillStyle = color;
+                ctx.font = 'bold 10px sans-serif';
+                ctx.fillText((val * 100).toFixed(0), x, y - 12);
             });
         }
 

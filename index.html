@@ -250,7 +250,22 @@
         </div>
 
         <script>
-            alert("Script loaded OK!");
+            // Startup Check
+            window.addEventListener('load', () => {
+                const debugEl = document.getElementById('debug-status');
+                if (typeof Papa === 'undefined') {
+                    debugEl.style.display = 'block';
+                    debugEl.innerHTML = "ERREUR CRITIQUE: La librairie PapaParse n'a pas pu être chargée.<br>Vérifiez votre connexion internet ou si le CDN est bloqué.";
+                    alert("ERREUR CRITIQUE: PapaParse non chargé !");
+                } else {
+                    console.log("PapaParse loaded successfully.");
+                    // Optional: debugEl.style.display = 'block';
+                    // debugEl.innerHTML = "System Ready - Waiting for file...";
+                    // setTimeout(() => debugEl.style.display = 'none', 3000);
+                }
+            });
+
+            // alert("Script loaded OK!"); // Removed to reduce noise
             // Camelot Helper
             function getCamelotKey(key, mode) {
                 // Exportify usually gives Key as integer (0-11) and Mode as integer (0 or 1)
@@ -336,7 +351,13 @@
             document.getElementById('csvFile').addEventListener('change', handleFileSelect, false);
 
             function handleFileSelect(evt) {
-                alert("File selected! Starting parse...");
+                const debugEl = document.getElementById('debug-status');
+                if (debugEl) {
+                    debugEl.style.display = 'block';
+                    debugEl.innerHTML = "Fichier détecté ! Traitement en cours...";
+                }
+                console.log("File detected");
+
                 const file = evt.target.files[0];
                 if (!file) return;
 

@@ -3,8 +3,21 @@
 
 <head>
     <meta charset="UTF-8" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Triateur de Playlists (CSV Exportify)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script>
+        // Force unregister any service workers that might be caching the page
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(function (registrations) {
+                for (let registration of registrations) {
+                    registration.unregister();
+                }
+            });
+        }
+    </script>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -144,6 +157,14 @@
     <div class="container">
         <h1>Triateur de Playlists 🪩 <span style="font-size: 0.5em; vertical-align: middle; color: #666;">(V0)</span>
         </h1>
+
+        <div style="text-align: center; margin-bottom: 20px;">
+            <button onclick="window.location.reload(true)"
+                style="background: #ff5722; color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em;">
+                ⚠️ Force Refresh / Clear Cache
+            </button>
+        </div>
+
         <div id="debug-status"
             style="text-align: center; color: red; font-weight: bold; padding: 10px; border: 1px solid red; display: none;">
         </div>

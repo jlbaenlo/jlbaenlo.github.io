@@ -532,12 +532,27 @@
             ctx.strokeStyle = color;
             ctx.lineWidth = 3;
 
-            meta.forEach((m, i) => {
-                const x = m.centerX;
-                const y = m[yProp];
-                if (i === 0) ctx.moveTo(x, y);
-                else ctx.lineTo(x, y);
-            });
+            // Prepare points
+            const points = meta.map(m => ({ x: m.centerX, y: m[yProp] }));
+
+            if (points.length > 0) {
+                ctx.moveTo(points[0].x, points[0].y);
+
+                for (let i = 0; i < points.length - 1; i++) {
+                    const curr = points[i];
+                    const next = points[i + 1];
+
+                    // Calculate control points for smoothing (simple sigmoid approach)
+                    // This creates a nice "S" curve between phases which feels natural for flow
+                    const cp1x = curr.x + (next.x - curr.x) / 2;
+                    const cp1y = curr.y;
+                    const cp2x = curr.x + (next.x - curr.x) / 2;
+                    const cp2y = next.y;
+
+                    ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, next.x, next.y);
+                }
+            }
+
             ctx.stroke();
 
             // Points

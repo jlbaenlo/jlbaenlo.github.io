@@ -585,8 +585,19 @@
                 const pA = source[idxA];
                 const pB = source[idxB];
 
+                // Standard DJ Naming Logic based on Position
+                let newName = "Phase";
+                if (i === 0) newName = "Warm-up";
+                else if (i === targetCount - 1) newName = "Cool Down";
+                else {
+                    // Mid sections
+                    if (progress < 0.35) newName = "Build-up";
+                    else if (progress < 0.70) newName = "Peak";
+                    else newName = "Sustain";
+                }
+
                 newPhases.push({
-                    name: pA.name || `Phase ${i + 1}`,
+                    name: newName, // Will be numbered later if duplicate
                     durationPercent: 1 / targetCount,
                     energy: lerp(pA.energy, pB.energy, t),
                     dance: lerp(pA.dance, pB.dance, t),
@@ -594,6 +605,19 @@
                     tempo: lerp(pA.tempo || 0.5, pB.tempo || 0.5, t)
                 });
             }
+
+            // Smart Numbering for duplicates (e.g. Peak 1, Peak 2)
+            const counts = {};
+            newPhases.forEach(p => counts[p.name] = (counts[p.name] || 0) + 1);
+
+            const current = {};
+            newPhases.forEach(p => {
+                if (counts[p.name] > 1) {
+                    current[p.name] = (current[p.name] || 0) + 1;
+                    p.name = `${p.name} ${current[p.name]}`;
+                }
+            });
+
             phases = newPhases;
         }
 

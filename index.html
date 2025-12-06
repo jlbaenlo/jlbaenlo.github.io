@@ -170,6 +170,22 @@
             <p id="import-status" style="margin-top: 10px; font-weight: bold;"></p>
         </div>
 
+        <!-- STATS SECTION -->
+        <div id="stats-section" class="hidden" style="margin-bottom: 30px; animation: fadeIn 0.5s;">
+            <h3 style="border-bottom: 2px solid #eee; padding-bottom: 10px;">📊 Analyse de la Playlist</h3>
+
+            <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px;">
+                <div
+                    style="flex: 1; min-width: 300px; height: 300px; padding: 10px; background: #fafafa; border-radius: 8px;">
+                    <canvas id="genreChart"></canvas>
+                </div>
+                <div
+                    style="flex: 1; min-width: 300px; height: 300px; padding: 10px; background: #fafafa; border-radius: 8px;">
+                    <canvas id="criteriaChart"></canvas>
+                </div>
+            </div>
+        </div>
+
         <!-- STEP 2: CONFIG & GRAPH -->
         <div id="step-config" class="step hidden">
             <h2>2. Design Your Flow 🌊</h2>
@@ -329,11 +345,107 @@
                 complete: function (results) {
                     rawTracks = results.data;
                     document.getElementById('import-status').textContent = `✅ ${rawTracks.length} titres.`;
+
+                    // Show Next Steps
                     document.getElementById('step-config').classList.remove('hidden');
+                    document.getElementById('stats-section').classList.remove('hidden');
+
+                    // Init Graph & Stats
                     initGraph();
+                    calculateStats(rawTracks);
                 }
             });
         });
+
+        // --- STATS LOGIC ---
+        let genreChartInst = null;
+        let criteriaChartInst = null;
+
+        function calculateStats(tracks) {
+            // 1. Genre Distribution (Pie)
+            const genreCounts = {};
+            tracks.forEach(t => {
+                // Try to guess genre column content. usually 'Genres' or 'Artist Genres'
+                // Exportify standard: "Genres"
+                let g = "Unknown";
+                if (t.Genres && typeof t.Genres === 'string') {
+                    g = t.Genres.split(',')[0].trim(); // Take primary
+                }
+                if (!g || g === "") g = "Unknown";
+
+                genreCounts[g] = (genreCounts[g] || 0) + 1;
+            });
+
+            // Sort and Top 10
+            const sortedGenres = Object.entries(genreCounts)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const genreLabels = sortedGenres.map(x => x[0]);
+            const genreData = sortedGenres.map(x => x[1]);
+
+            // Render Genre Chart
+            const ctxG = document.getElementById('genreChart').getContext('2d');
+            if (genreChartInst) genreChartInst.destroy();
+            genreChartInst = new Chart(ctxG, {
+                type: 'pie',
+                data: {
+                    labels: genreLabels,
+                    datasets: [{
+                        data: genreData,
+                        backgroundColor: [
+                            '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
+                            '#FF9F40', '#E7E9ED', '#76A346', '#800080', '#000080'
+                        ]
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Top 10 Genres' },
+                        legend: { position: 'right' }
+                    }
+                }
+            });
+
+            // 2. Criteria Distribution (Bar)
+            // Buckets: 0-0.2, 0.2-0.4, 0.4-0.6, 0.6-0.8, 0.8-1.0
+            const buckets = {
+                energy: [0, 0, 0, 0, 0],
+                dance: [0, 0, 0, 0, 0],
+                valence: [0, 0, 0, 0, 0],
+                tempo: [0, 0, 0] // 60-90, 90-120, 120+ (Different logic)
+            };
+
+            tracks.forEach(t => {
+                const bucketIdx = (val) => Math.min(4, Math.floor(val * 5));
+                if (t.Energy) buckets.energy[bucketIdx(t.Energy)]++;
+                if (t.Danceability) buckets.dance[bucketIdx(t.Danceability)]++;
+                if (t.Valence) buckets.valence[bucketIdx(t.Valence)]++;
+            });
+
+            const ctxC = document.getElementById('criteriaChart').getContext('2d');
+            if (criteriaChartInst) criteriaChartInst.destroy();
+            criteriaChartInst = new Chart(ctxC, {
+                type: 'bar',
+                data: {
+                    labels: ['0-20%', '20-40%', '40-60%', '60-80%', '80-100%'],
+                    datasets: [
+                        { label: 'Energy', data: buckets.energy, backgroundColor: 'rgba(255, 99, 132, 0.7)' },
+                        { label: 'Dance', data: buckets.dance, backgroundColor: 'rgba(54, 162, 235, 0.7)' },
+                        { label: 'Valence', data: buckets.valence, backgroundColor: 'rgba(75, 192, 192, 0.7)' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: { display: true, text: 'Critères Distribution' }
+                    }
+                }
+            });
+        }
 
         // --- STEP 2: ADVANCED GRAPH ---
         const canvas = document.getElementById('flowChart');
@@ -603,25 +715,37 @@
             meta.forEach(m => {
                 const x = m.centerX;
                 const y = m[yProp];
-                const val = m[valProp];
+                const val = m[valProp] !== undefined ? m[valProp] : 0.5; // Safety default
 
-                // Point
+                // Draw Point
                 ctx.beginPath();
-                ctx.arc(x, y, 5, 0, Math.PI * 2);
+                ctx.arc(x, y, 6, 0, Math.PI * 2); // Slightly larger
                 ctx.fillStyle = 'white';
                 ctx.fill();
                 ctx.strokeStyle = color;
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
-                // Label (Background)
-                ctx.fillStyle = 'rgba(255,255,255,0.7)';
-                ctx.fillRect(x - 10, y - 22, 20, 12);
+                // Draw Label Box
+                // Position above the point
+                const labelTxt = (val * 100).toFixed(0) + "%";
+                const txtWidth = ctx.measureText(labelTxt).width;
+                const boxW = txtWidth + 10;
+                const boxH = 16;
+                const boxX = x - boxW / 2;
+                const boxY = y - 28;
 
-                // Label (Text)
-                ctx.fillStyle = color;
-                ctx.font = 'bold 10px sans-serif';
-                ctx.fillText((val * 100).toFixed(0), x, y - 12);
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.9)'; // High contrast background
+                ctx.strokeStyle = '#ddd';
+                ctx.lineWidth = 1;
+                ctx.fillRect(boxX, boxY, boxW, boxH);
+                ctx.strokeRect(boxX, boxY, boxW, boxH);
+
+                // Draw Label Text
+                ctx.fillStyle = '#333'; // Dark text
+                ctx.font = 'bold 11px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText(labelTxt, x, boxY + 12);
             });
         }
 

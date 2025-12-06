@@ -979,23 +979,63 @@
         });
 
         function renderTable(tracks) {
+            // Update Headers
+            const thead = document.querySelector('#resultTable thead tr');
+            thead.innerHTML = `
+                <th>#</th>
+                <th>Heure</th>
+                <th>Titre</th>
+                <th>Artiste</th>
+                <th>Durée</th>
+                <th>BPM</th>
+                <th>Energy</th>
+                <th>Dance</th>
+                <th>Valence</th>
+            `;
+
             const tbody = document.querySelector('#resultTable tbody');
             tbody.innerHTML = '';
 
+            // Calculate Start Time
+            let currentTime = 0; // ms offset
+            const startVal = document.getElementById('startTime').value;
+            const [sh, sm] = startVal.split(':').map(Number);
+            const startMs = (sh * 3600 + sm * 60) * 1000;
+
             tracks.forEach((t, i) => {
+                // Calculate actual time for this track
+                const trackStartMs = startMs + currentTime;
+                const date = new Date(trackStartMs);
+                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                // Duration
+                const durMs = parseInt(t['Duration (ms)'] || 0);
+                const durMin = Math.floor(durMs / 60000);
+                const durSec = Math.floor((durMs % 60000) / 1000);
+                const durStr = `${durMin}:${durSec.toString().padStart(2, '0')}`;
+
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td>${i + 1}</td>
+                    <td>${timeStr}</td>
                     <td>${t['Track Name'] || '???'}</td>
                     <td>${t['Artist Name(s)'] || ''}</td>
+                    <td>${durStr}</td>
                     <td>${t.BPM || t.Tempo || ''}</td>
                     <td>${parseFloat(t.Energy).toFixed(2)}</td>
                     <td>${parseFloat(t.Danceability).toFixed(2)}</td>
+                    <td>${parseFloat(t.Valence).toFixed(2)}</td>
                 `;
                 tbody.appendChild(tr);
+
+                currentTime += durMs;
             });
 
             document.getElementById('downloadBtn').onclick = function () {
+                // Add computed Time column to CSV export?
+                // Currently just re-exports raw data mostly.
+                // Let's stick to simple export for now or user might complain about format change.
+                // But user asked for visualization.
                 const csv = Papa.unparse(tracks);
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);

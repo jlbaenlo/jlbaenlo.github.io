@@ -331,6 +331,9 @@
             <h2>3. Résultats</h2>
             <p id="result-summary"></p>
             <button id="downloadBtn" class="btn">📥 Télécharger le CSV trié</button>
+            <button id="spotifyExportBtn" class="btn hidden"
+                style="background-color: #1DB954; color: white; border: none; margin-left: 10px;">🟢 Exporter ver
+                Spotify</button>
 
             <div class="table-responsive">
                 <table id="resultTable">
@@ -1477,7 +1480,10 @@
                 currentTime += durMs;
             });
 
-            document.getElementById('downloadBtn').onclick = function () {
+            <!-- Buttons Logic -->
+            // Show Download Button
+            const downBtn = document.getElementById('downloadBtn');
+            downBtn.onclick = function () {
                 const csv = Papa.unparse(tracks);
                 const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
                 const url = URL.createObjectURL(blob);
@@ -1485,6 +1491,13 @@
                 a.href = url;
                 a.download = 'playlist_final.csv';
                 a.click();
+            };
+
+            // Show Spotify Button
+            const spotifyBtn = document.getElementById('spotifyExportBtn');
+            spotifyBtn.classList.remove('hidden');
+            spotifyBtn.onclick = function () {
+                handleSpotifyExport(tracks);
             };
         }
 

@@ -330,6 +330,30 @@
         <div id="step-results" class="step hidden">
             <h2>3. Résultats</h2>
             <p id="result-summary"></p>
+            <!-- Spotify Config (Hidden by default) -->
+            <div id="spotifyConfig" class="hidden"
+                style="margin-top: 15px; padding: 15px; background: #e8f5e9; border: 1px solid #4caf50; border-radius: 8px; text-align: left;">
+                <h4 style="margin-top: 0; color: #2e7d32;">🟢 Configuration Spotify</h4>
+                <p style="font-size: 0.9em;">Pour exporter, vous devez créer une app sur <a
+                        href="https://developer.spotify.com/dashboard" target="_blank">Spotify Developer Dashboard</a>.
+                </p>
+                <div style="margin-bottom: 10px;">
+                    <label style="font-weight: bold; font-size: 0.9em;">1. Ajoutez cette URL dans "Redirect URIs"
+                        :</label>
+                    <code id="redirectUriDisplay"
+                        style="display: block; background: #fff; padding: 5px; border: 1px solid #ccc; margin-top: 3px; font-size: 0.85em; word-break: break-all;">...</code>
+                </div>
+                <div>
+                    <label style="font-weight: bold; font-size: 0.9em;">2. Collez votre "Client ID" ici :</label>
+                    <input type="text" id="spotifyClientIdInput" placeholder="Ex: 8a7b..."
+                        style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; margin-top: 3px;">
+                </div>
+                <div style="text-align: right; margin-top: 10px;">
+                    <button id="saveClientIdBtn" class="btn"
+                        style="background-color: #2e7d32; font-size: 0.9em;">Sauvegarder & Continuer</button>
+                </div>
+            </div>
+
             <button id="downloadBtn" class="btn">📥 Télécharger le CSV trié</button>
             <button id="spotifyExportBtn" class="btn hidden"
                 style="background-color: #1DB954; color: white; border: none; margin-left: 10px;">🟢 Exporter ver
@@ -373,20 +397,41 @@
         async function handleSpotifyExport(playlistTracks) {
             log("Initiating Spotify Export...");
 
+            // 0. Update Redirect URI Display
+            const redirectUri = window.location.href.split('#')[0];
+            document.getElementById('redirectUriDisplay').textContent = redirectUri;
+
             // 1. Check for Token
             let token = localStorage.getItem(ACCESS_TOKEN_KEY);
             let tokenExpiry = localStorage.getItem('spotify_token_expiry');
 
             if (!token || (tokenExpiry && Date.now() > parseInt(tokenExpiry))) {
-                // Auth Flow
-                const clientId = prompt("Veuillez entrer votre Spotify Client ID (depuis developer.spotify.com):\n(Assurez-vous que l'URL actuelle est whitelisted dans votre Dashboard Spotify)", localStorage.getItem(CLIENT_ID_STORAGE_KEY) || '');
+                // Auth Flow Needed
+                // Check if we have Client ID
+                let clientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
 
+                // If NO Client ID, Show UI
                 if (!clientId) {
-                    log("Export annulé : Client ID manquant.");
-                    return;
+                    const configDiv = document.getElementById('spotifyConfig');
+                    configDiv.classList.remove('hidden');
+                    configDiv.scrollIntoView({ behavior: 'smooth' });
+
+                    // Bind Save Button (once)
+                    document.getElementById('saveClientIdBtn').onclick = function () {
+                        const inputVal = document.getElementById('spotifyClientIdInput').value.trim();
+                        if (inputVal) {
+                            localStorage.setItem(CLIENT_ID_STORAGE_KEY, inputVal);
+                            configDiv.classList.add('hidden');
+                            handleSpotifyExport(playlistTracks); // Retry
+                        } else {
+                            alert("Veuillez entrer un Client ID.");
+                        }
+                    };
+                    return; // Stop here, wait for user interaction
                 }
 
-                localStorage.setItem(CLIENT_ID_STORAGE_KEY, clientId);
+                // We have Client ID -> Redirect
+                log("Redirecting to Spotify Auth...");
 
                 // Save State before redirect
                 const appState = {
@@ -398,8 +443,6 @@
                 };
                 localStorage.setItem(STATE_KEY, JSON.stringify(appState));
 
-                // Redirect
-                const redirectUri = window.location.href.split('#')[0]; // Current URL without hash
                 const scope = 'playlist-modify-public playlist-modify-private';
                 const authUrl = `https://accounts.spotify.com/authorize?client_id=${clientId}&response_type=token&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
 

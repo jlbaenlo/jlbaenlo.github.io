@@ -356,7 +356,7 @@
 
             <button id="downloadBtn" class="btn">📥 Télécharger le CSV trié</button>
             <button id="spotifyExportBtn" class="btn hidden"
-                style="background-color: #1DB954; color: white; border: none; margin-left: 10px;">🟢 Exporter ver
+                style="background-color: #1DB954; color: white; border: none; margin-left: 10px;">🟢 Exporter vers
                 Spotify</button>
 
             <div class="table-responsive">
@@ -393,6 +393,7 @@
         const CLIENT_ID_STORAGE_KEY = 'spotify_client_id';
         const ACCESS_TOKEN_KEY = 'spotify_access_token';
         const STATE_KEY = 'spotify_auth_state';
+        const DEFAULT_CLIENT_ID = 'e37b29847db846ebbc8c6bfca9820c8d'; // Provided by User
 
         async function handleSpotifyExport(playlistTracks) {
             log("Initiating Spotify Export...");
@@ -407,10 +408,10 @@
 
             if (!token || (tokenExpiry && Date.now() > parseInt(tokenExpiry))) {
                 // Auth Flow Needed
-                // Check if we have Client ID
-                let clientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY);
+                // Check if we have Custom Client ID or use Default
+                let clientId = localStorage.getItem(CLIENT_ID_STORAGE_KEY) || DEFAULT_CLIENT_ID;
 
-                // If NO Client ID, Show UI
+                // If NO Client ID (Should not happen now with default), Show UI
                 if (!clientId) {
                     const configDiv = document.getElementById('spotifyConfig');
                     configDiv.classList.remove('hidden');
@@ -463,8 +464,15 @@
                 const userData = await userReq.json();
                 const userId = userData.id;
 
+                // Ask for Name
+                const defaultName = `My Flow - ${new Date().toLocaleDateString()}`;
+                const playlistName = prompt("Nom de votre Playlist Spotify :", defaultName);
+                if (!playlistName) {
+                    log("Export annulé par l'utilisateur.");
+                    return;
+                }
+
                 // Create Playlist
-                const playlistName = `My Flow - ${new Date().toLocaleDateString()}`;
                 const createReq = await fetch(`https://api.spotify.com/v1/users/${userId}/playlists`, {
                     method: 'POST',
                     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },

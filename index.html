@@ -486,8 +486,17 @@
                     });
                 }
 
-                alert(`Playlist "${playlistName}" créée avec succès !`);
-                window.open(playlistData.external_urls.spotify, '_blank');
+                // Success Handling
+                log(`Playlist "${playlistName}" created!`);
+
+                // 1. Show Link in UI (Fallback)
+                const resultSummary = document.getElementById('result-summary');
+                resultSummary.innerHTML = `✅ Playlist <b>"${playlistName}"</b> créée ! <a href="${playlistData.external_urls.spotify}" target="_blank" style="color:#1DB954; font-weight:bold;">Ouvrir sur Spotify ↗️</a><br>` + resultSummary.innerHTML;
+
+                // 2. Try to Open
+                if (confirm(`Playlist "${playlistName}" créée avec succès !\n\nVoulez-vous l'ouvrir sur Spotify maintenant ?`)) {
+                    window.open(playlistData.external_urls.spotify, '_blank');
+                }
 
             } catch (e) {
                 log("Spotify API Error: " + e.message);

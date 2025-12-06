@@ -265,24 +265,57 @@
 
                 <div id="algoInfo" class="hidden"
                     style="text-align: left; background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 0.9em; border: 1px solid #ddd;">
-                    <strong>1. Normalisation Dynamique</strong>
-                    <p>Le système analyse d'abord toute votre playlist importée pour détecter les plages de valeurs :
-                    </p>
+
+                    <h4 style="margin-top:0;">1. Normalisation Intelligente</h4>
+                    <p>Le système standardise toutes les données :</p>
                     <ul>
-                        <li><b>Critères (Energy, Dance, Valence):</b> Unifiés sur une échelle de 0 à 1 (automatiquement
-                            corrigé si 0-100).</li>
-                        <li><b>Tempo (BPM):</b> Relatif à VOTRE playlist. 0% = Votre chanson la plus lente, 100% = Votre
-                            chanson la plus rapide.</li>
+                        <li><b>Critères (0-1):</b> Energy, Dance, Valence sont recalibrés sur la même échelle.</li>
+                        <li><b>Tempo Relatif:</b> 0% correspond à votre titre le plus lent, 100% au plus rapide.</li>
+                        <li><b>Clé Musicale:</b> Chaque titre est analysé pour déterminer sa clé Camelot (ex: 8A, 5B).
+                        </li>
                     </ul>
 
-                    <strong>2. Tri par Distance Euclidienne</strong>
-                    <p>Pour chaque phase de votre courbe, l'algorithme cherche le morceau "mathématiquement le plus
-                        proche" de vos souhaits :</p>
+                    <h4>2. Cœur de l'Algo : Distance Mathématique</h4>
+                    <p>Pour chaque moment du set, on cherche le titre qui minimise l'écart avec votre courbe cible :</p>
                     <code
-                        style="display:block; background:#333; color:#fff; padding:10px; border-radius:4px; margin: 5px 0;">
-                        Distance = √ [ (Energy<sub>Target</sub> - Energy<sub>Track</sub>)² + (Tempo<sub>Target</sub> - Tempo<sub>Track</sub>)² ... ]
+                        style="display:block; background:#333; color:#fff; padding:10px; border-radius:4px; margin: 5px 0; font-size: 0.85em;">
+                        Score = √ [ (ΔEnergy)² + (ΔDance)² + (ΔValence)² + (ΔTempo)² ]
                     </code>
-                    <p>Le morceau avec la plus petite distance (score le plus bas) est choisi.</p>
+
+                    <h4>3. Contraintes Avancées (Bonus/Malus)</h4>
+                    <p>Si activées, ces options modifient le Score pour influencer le choix :</p>
+
+                    <div style="background: #eef; padding: 8px; border-radius: 4px; margin-bottom: 5px;">
+                        <b>🧬 Cohésion de Genre :</b>
+                        <ul style="margin:5px 0; padding-left:20px;">
+                            <li><b>But :</b> Créer des "mini-sets" de 2 à 4 titres du même style pour éviter l'effet
+                                "Jukebox aléatoire".</li>
+                            <li><b>Mécanique :</b>
+                                <ul>
+                                    <li>Si on continue le même genre : <b>Bonus (-0.1)</b> (pousse à continuer).</li>
+                                    <li>Si on change de genre trop tôt (< 2 titres) : <b>Malus (+2.0)</b> (évite le
+                                            zapping).</li>
+                                    <li>Si le même genre dure trop longtemps (> 4 titres) : <b>Gros Malus (+10.0)</b>
+                                        (force le changement).</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div style="background: #efe; padding: 8px; border-radius: 4px;">
+                        <b>🎹 Harmonic Mixing (Camelot) :</b>
+                        <ul style="margin:5px 0; padding-left:20px;">
+                            <li><b>But :</b> Des transitions fluides et musicales qui ne "heurtent" pas l'oreille.</li>
+                            <li><b>Mécanique :</b>
+                                <ul>
+                                    <li><b>Compatible :</b> Clé identique (8A→8A), Adjacente (8A→9A/7A), ou Swap
+                                        (8A→8B).</li>
+                                    <li><b>Bonus (-0.2) :</b> Appliqué aux titres harmoniquement compatibles.</li>
+                                    <li><b>Malus (+0.5) :</b> Appliqué aux titres dissonants.</li>
+                                </ul>
+                            </li>
+                        </ul>
+                    </div>
                 </div>
             </div>
 

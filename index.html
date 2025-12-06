@@ -219,9 +219,12 @@
             <div class="graph-container">
                 <canvas id="flowChart"></canvas>
             </div>
-            <div style="display: flex; justify-content: center; gap: 15px; font-size: 13px; margin-top: 5px;">
+            <div
+                style="display: flex; justify-content: center; gap: 15px; font-size: 13px; margin-top: 5px; flex-wrap: wrap;">
                 <span style="color:rgba(255, 99, 132, 1)">● Energy</span>
-                <span style="color:rgba(54, 162, 235, 1)">● Danceability</span>
+                <span style="color:rgba(54, 162, 235, 1)">● Dance</span>
+                <span style="color:rgba(75, 192, 192, 1)">● Valence</span>
+                <span style="color:rgba(255, 206, 86, 1)">● Tempo</span>
             </div>
 
             <div style="text-align: center; margin-top: 30px;">
@@ -340,33 +343,27 @@
 
         // Presets
         const PRESETS = {
-            custom: () => [], // Handled by generic
-            party: (n) => {
-                // Warmup -> Build -> Peak -> Sustain -> Cool
-                // Ideal for 5 phases
-                return [
-                    { d: 0.15, e: 0.3, da: 0.4 }, // Warmup
-                    { d: 0.25, e: 0.6, da: 0.6 }, // Build
-                    { d: 0.25, e: 0.9, da: 0.9 }, // Peak
-                    { d: 0.20, e: 0.8, da: 0.8 }, // Sustain
-                    { d: 0.15, e: 0.4, da: 0.5 }  // Cool
-                ];
-            },
-            apero: (n) => {
-                // Chill & Consistent
-                let p = [];
-                for (let i = 0; i < n; i++) p.push({ d: 1 / n, e: 0.4, da: 0.5 + (i % 2) * 0.1 });
-                return p;
-            },
-            sport: (n) => {
-                // High Energy Interval
-                return [
-                    { d: 0.1, e: 0.5, da: 0.5 },
-                    { d: 0.4, e: 0.9, da: 0.8 },
-                    { d: 0.4, e: 0.8, da: 0.8 },
-                    { d: 0.1, e: 0.4, da: 0.4 }
-                ];
-            }
+            custom: () => [],
+            party: (n) => [
+                { name: "Warm-up", d: 0.15, e: 0.3, da: 0.4, v: 0.5, t: 0.3 },
+                { name: "Build-up", d: 0.20, e: 0.6, da: 0.6, v: 0.6, t: 0.5 },
+                { name: "Peak 1", d: 0.20, e: 0.9, da: 0.9, v: 0.8, t: 0.7 },
+                { name: "Peak 2", d: 0.25, e: 0.85, da: 0.85, v: 0.9, t: 0.7 },
+                { name: "Cool Down", d: 0.20, e: 0.4, da: 0.5, v: 0.5, t: 0.4 }
+            ],
+            apero: (n) => [
+                { name: "Welcome", d: 0.2, e: 0.3, da: 0.4, v: 0.7, t: 0.3 },
+                { name: "Chill", d: 0.2, e: 0.4, da: 0.5, v: 0.8, t: 0.35 },
+                { name: "Lounge", d: 0.2, e: 0.4, da: 0.6, v: 0.8, t: 0.4 },
+                { name: "Groove", d: 0.2, e: 0.5, da: 0.7, v: 0.9, t: 0.45 },
+                { name: "Sunset", d: 0.2, e: 0.3, da: 0.4, v: 0.7, t: 0.3 }
+            ],
+            sport: (n) => [
+                { name: "Warm-up", d: 0.1, e: 0.4, da: 0.4, v: 0.5, t: 0.4 },
+                { name: "High Intensity", d: 0.35, e: 0.95, da: 0.7, v: 0.7, t: 0.9 },
+                { name: "Endurance", d: 0.45, e: 0.8, da: 0.8, v: 0.8, t: 0.8 },
+                { name: "Recovery", d: 0.1, e: 0.3, da: 0.3, v: 0.5, t: 0.3 }
+            ]
         };
 
         function initGraph() {
@@ -382,11 +379,15 @@
                 const presetData = PRESETS[mode](numPhases);
                 // Adapt preset to current numPhases if needed
                 if (presetData.length === numPhases) {
-                    phases = presetData.map(p => ({ durationPercent: p.d, energy: p.e, dance: p.da }));
+                    phases = presetData.map(p => ({
+                        name: p.name, durationPercent: p.d, energy: p.e, dance: p.da, valence: p.v, tempo: p.t
+                    }));
                 } else {
                     // Fallback: fill generic
                     const baseW = 1 / numPhases;
-                    for (let i = 0; i < numPhases; i++) phases.push({ durationPercent: baseW, energy: 0.5, dance: 0.5 });
+                    for (let i = 0; i < numPhases; i++) phases.push({
+                        name: `Phase ${i + 1}`, durationPercent: baseW, energy: 0.5, dance: 0.5, valence: 0.5, tempo: 0.5
+                    });
                 }
             }
 
@@ -395,9 +396,12 @@
                 const baseW = 1 / numPhases;
                 for (let i = 0; i < numPhases; i++) {
                     phases.push({
+                        name: `Phase ${i + 1}`,
                         durationPercent: baseW,
                         energy: 0.5 + (Math.sin(i / numPhases * Math.PI) * 0.4),
-                        dance: 0.5 + (Math.sin(i / numPhases * Math.PI) * 0.3)
+                        dance: 0.5 + (Math.sin(i / numPhases * Math.PI) * 0.3),
+                        valence: 0.5,
+                        tempo: 0.5
                     });
                 }
             }

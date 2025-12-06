@@ -1007,6 +1007,79 @@
         });
 
 
+        // Helper to get Camelot Key
+        // Returns object { num: 8, letter: 'A' } or null
+        function getCamelot(track) {
+            // If already has Camelot string
+            if (track.Camelot) {
+                const match = track.Camelot.match(/(\d+)([AB])/);
+                if (match) return { num: parseInt(match[1]), letter: match[2] };
+            }
+
+            // Calculate from Key/Mode
+            const key = parseInt(track.Key);
+            const mode = parseInt(track.Mode);
+
+            if (isNaN(key) || isNaN(mode)) return null;
+
+            // Camelot Logic
+            // Major (Mode 1): 0=8B, 1=3B, 2=10B, 3=5B, 4=12B, 5=7B, 6=2B, 7=9B, 8=4B, 9=11B, 10=6B, 11=1B
+            // Minor (Mode 0): 0=5A, 1=12A, 2=7A, 3=2A, 4=9A, 5=4A, 6=11A, 7=6A, 8=1A, 9=8A, 10=3A, 11=10A
+
+            const majorMap = [8, 3, 10, 5, 12, 7, 2, 9, 4, 11, 6, 1];
+            const minorMap = [5, 12, 7, 2, 9, 4, 11, 6, 1, 8, 3, 10];
+
+            const num = mode === 1 ? majorMap[key] : minorMap[key];
+            const letter = mode === 1 ? 'B' : 'A';
+
+            return { num, letter };
+        }
+
+        function normalizeTracks(tracks) {
+            log("Normalizing data ranges...");
+
+            // 1. Detect Scale for basic metrics
+            let maxEnergy = 0;
+            let minBPM = Infinity;
+            let maxBPM = -Infinity;
+
+            tracks.forEach(t => {
+                const e = parseFloat(t.Energy) || 0;
+                if (e > maxEnergy) maxEnergy = e;
+
+                const bpm = parseFloat(t.BPM || t.Tempo) || 0;
+                if (bpm > 0) {
+                    if (bpm < minBPM) minBPM = bpm;
+                    if (bpm > maxBPM) maxBPM = bpm;
+                }
+            });
+
+            const isScale100 = maxEnergy > 1.0;
+            if (minBPM === Infinity) { minBPM = 60; maxBPM = 180; }
+            if (minBPM === maxBPM) { minBPM = 0; maxBPM = 200; }
+
+            tracks.forEach(t => {
+                // Normalize Metrics
+                const e = parseFloat(t.Energy) || 0;
+                const d = parseFloat(t.Danceability) || 0;
+                const v = parseFloat(t.Valence) || 0;
+
+                t._nEnergy = isScale100 ? e / 100 : e;
+                t._nDance = isScale100 ? d / 100 : d;
+                t._nValence = isScale100 ? v / 100 : v;
+
+                // Normalize BPM
+                const bpm = parseFloat(t.BPM || t.Tempo) || minBPM;
+                const normBPM = Math.max(0, Math.min(1, (bpm - minBPM) / (maxBPM - minBPM)));
+                t._nTempo = normBPM;
+
+                // Pre-calc Camelot
+                t._camelot = getCamelot(t);
+            });
+
+            log(`Normalization Done. Scale=${isScale100 ? '0-100' : '0-1'}. BPM Range=${minBPM}-${maxBPM}`);
+        }
+
         // --- STEP 3: GENERATION (Duration Based & Genre Chaining) ---
         document.getElementById('generateBtn').addEventListener('click', function () {
             log("Computing Playlist...");
@@ -1018,8 +1091,11 @@
 
             // Constraints
             const useGenreCohesion = document.getElementById('genreCohesion').checked;
+            const useHarmonic = document.getElementById('harmonicMixing').checked;
+
             let currentGenre = null;
             let genreStreak = 0;
+            let currentCamelot = null;
 
             phases.forEach((p, i) => {
                 const phaseTargetDur = totalDurMs * p.durationPercent;
@@ -1049,35 +1125,40 @@
                         );
 
                         // --- GENRE CONSTRAINT ---
-                        if (useGenreCohesion) {
-                            // Determine Track Genre
-                            let gRaw = t['Genres'] || t['Artist Genres'] || t['Genre'] || "";
-                            let tGenre = getAggregatedGenre(gRaw);
-
-                            if (playlist.length === 0) {
-                                // First track: no penalty, just set precedence
+                        if (useGenreCohesion && playlist.length > 0 && currentGenre) {
+                            let tGenre = getAggregatedGenre(t['Genres'] || t['Artist Genres'] || t['Genre']);
+                            if (tGenre === currentGenre) {
+                                if (genreStreak >= 4) dist += 10.0; // Penalty (Force Switch)
+                                else dist -= 0.1; // Bonus (Keep Going)
                             } else {
-                                // If we have a current genre running
-                                if (currentGenre) {
-                                    if (tGenre === currentGenre) {
-                                        // Same Genre:
-                                        if (genreStreak >= 4) {
-                                            // Forced Switch! Penalize Heavily
-                                            dist += 10.0;
-                                        } else {
-                                            // Encourage Continuation (Small Bonus)
-                                            dist -= 0.1;
-                                        }
-                                    } else {
-                                        // Different Genre:
-                                        if (genreStreak < 2) {
-                                            // Too soon to switch! Penalize
-                                            dist += 2.0;
-                                        } else {
-                                            // Good time to switch. No Penalty.
-                                        }
-                                    }
-                                }
+                                if (genreStreak < 2) dist += 2.0; // Penalty (Switch too soon)
+                            }
+                        }
+
+                        // --- HARMONIC CONSTRAINT ---
+                        if (useHarmonic && playlist.length > 0 && currentCamelot && t._camelot) {
+                            // Check compatibility
+                            // Perfect: Same (8A -> 8A)
+                            // Compatible: +/- 1 Number (8A -> 7A, 9A)
+                            // Mode Swap: Same number, diff letter (8A -> 8B)
+
+                            const c1 = currentCamelot;
+                            const c2 = t._camelot;
+
+                            let isCompatible = false;
+
+                            if (c1.num === c2.num && c1.letter === c2.letter) isCompatible = true; // Exact
+                            else if (c1.num === c2.num && c1.letter !== c2.letter) isCompatible = true; // Mode swap
+                            else if (c1.letter === c2.letter) {
+                                // Number adjacency (handling 12-1 wrap)
+                                const diff = Math.abs(c1.num - c2.num);
+                                if (diff === 1 || diff === 11) isCompatible = true;
+                            }
+
+                            if (!isCompatible) {
+                                dist += 0.5; // Penalty for disharmonic
+                            } else {
+                                dist -= 0.2; // Bonus for harmonic
                             }
                         }
 
@@ -1103,6 +1184,8 @@
                                 genreStreak = 1;
                             }
                         }
+
+                        if (track._camelot) currentCamelot = track._camelot;
 
                         playlist.push(track);
                         pool.splice(bestIdx, 1);

@@ -243,7 +243,37 @@
                 <span style="color:rgba(255, 206, 86, 1)">● Tempo</span>
             </div>
 
-            <div style="text-align: center; margin-top: 30px;">
+            <!-- Algorithm Explanation -->
+            <div style="text-align: center; margin-top: 20px;">
+                <button onclick="document.getElementById('algoInfo').classList.toggle('hidden')"
+                    class="btn btn-secondary" style="font-size: 12px; padding: 5px 10px;">
+                    ℹ️ Comprendre l'Algorithme
+                </button>
+
+                <div id="algoInfo" class="hidden"
+                    style="text-align: left; background: #f9f9f9; padding: 15px; border-radius: 8px; margin-top: 10px; font-size: 0.9em; border: 1px solid #ddd;">
+                    <strong>1. Normalisation Dynamique</strong>
+                    <p>Le système analyse d'abord toute votre playlist importée pour détecter les plages de valeurs :
+                    </p>
+                    <ul>
+                        <li><b>Critères (Energy, Dance, Valence):</b> Unifiés sur une échelle de 0 à 1 (automatiquement
+                            corrigé si 0-100).</li>
+                        <li><b>Tempo (BPM):</b> Relatif à VOTRE playlist. 0% = Votre chanson la plus lente, 100% = Votre
+                            chanson la plus rapide.</li>
+                    </ul>
+
+                    <strong>2. Tri par Distance Euclidienne</strong>
+                    <p>Pour chaque phase de votre courbe, l'algorithme cherche le morceau "mathématiquement le plus
+                        proche" de vos souhaits :</p>
+                    <code
+                        style="display:block; background:#333; color:#fff; padding:10px; border-radius:4px; margin: 5px 0;">
+                        Distance = √ [ (Energy<sub>Target</sub> - Energy<sub>Track</sub>)² + (Tempo<sub>Target</sub> - Tempo<sub>Track</sub>)² ... ]
+                    </code>
+                    <p>Le morceau avec la plus petite distance (score le plus bas) est choisi.</p>
+                </div>
+            </div>
+
+            <div style="text-align: center; margin-top: 20px;">
                 <button id="generateBtn" class="btn">🚀 Générer la Playlist</button>
             </div>
         </div>

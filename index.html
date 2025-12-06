@@ -430,7 +430,7 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             const w = canvas.width;
             const h = canvas.height;
-            const padding = 30; // Bottom padding for labels
+            const padding = 40; // Increased padding for labels
 
             // Background Grid
             ctx.strokeStyle = '#f0f0f0';
@@ -444,7 +444,7 @@
 
             // Calculate Start X for each phase
             let currentXPct = 0;
-            const phaseMeta = []; // Store calculated coordinates for interaction
+            const phaseMeta = [];
 
             phases.forEach((p, i) => {
                 const startX = currentXPct * w;
@@ -457,7 +457,10 @@
                     endX: startX + phaseW,
                     centerX: centerX,
                     centerY_E: (1 - p.energy) * (h - padding),
-                    centerY_D: (1 - p.dance) * (h - padding)
+                    centerY_D: (1 - p.dance) * (h - padding),
+                    centerY_V: (1 - p.valence) * (h - padding),
+                    centerY_T: (1 - p.tempo) * (h - padding),
+                    name: p.name
                 });
 
                 // Draw Separator (if not last)
@@ -478,42 +481,50 @@
                 currentXPct += p.durationPercent;
             });
 
-            // Store meta for drag hits
             canvas.phaseMeta = phaseMeta;
 
             // Draw Lines & Points
             drawCurve(phaseMeta, 'energy', 'centerY_E', 'rgba(255, 99, 132, 1)');
             drawCurve(phaseMeta, 'dance', 'centerY_D', 'rgba(54, 162, 235, 1)');
+            drawCurve(phaseMeta, 'valence', 'centerY_V', 'rgba(75, 192, 192, 1)');
+            drawCurve(phaseMeta, 'tempo', 'centerY_T', 'rgba(255, 206, 86, 1)');
 
-            // Draw Time Labels (X-axis)
-            ctx.fillStyle = '#666';
-            ctx.font = '10px monospace';
+            // Draw Time & Name Labels
             ctx.textAlign = 'center';
 
             // Start Time
-            ctx.fillText(document.getElementById('startTime').value, 0 + 20, h - 10);
+            ctx.font = '10px monospace';
+            ctx.fillStyle = '#999';
+            ctx.fillText(document.getElementById('startTime').value, 0 + 25, h - 5);
+            ctx.fillText(document.getElementById('endTime').value, w - 25, h - 5);
 
-            // Phase Times
+            // Phase Times & Names
             let timeAccum = 0;
             const [sh, sm] = document.getElementById('startTime').value.split(':').map(Number);
             const refStartMin = sh * 60 + sm;
 
             phases.forEach((p, i) => {
+                const meta = phaseMeta[i];
+
+                // Phase Name
+                ctx.font = 'bold 12px sans-serif';
+                ctx.fillStyle = '#333';
+                ctx.fillText(p.name || `P${i + 1}`, meta.centerX, h - 20);
+
                 timeAccum += p.durationPercent * totalTimeMinutes;
+
+                // Separator Time
                 if (i < phases.length - 1) {
-                    // Separator Time
                     const minVal = Math.floor(refStartMin + timeAccum);
                     const labelH = Math.floor((minVal / 60) % 24);
                     const labelM = Math.floor(minVal % 60);
                     const label = `${labelH}:${labelM.toString().padStart(2, '0')}`;
 
-                    const x = phaseMeta[i].endX;
-                    ctx.fillText(label, x, h - 10);
+                    ctx.font = '10px monospace';
+                    ctx.fillStyle = '#666';
+                    ctx.fillText(label, meta.endX, h - 5);
                 }
             });
-
-            // End Time
-            ctx.fillText(document.getElementById('endTime').value, w - 20, h - 10);
         }
 
         function drawCurve(meta, prop, yProp, color) {
@@ -547,16 +558,17 @@
         // --- INTERACTION ---
         canvas.addEventListener('mousedown', e => {
             const r = canvas.getBoundingClientRect();
-            const mx = e.clientX - r.left;
-            const my = e.clientY - r.top;
-            const meta = canvas.phaseMeta;
+            const scaleX = canvas.width / r.width;
+            const scaleY = canvas.height / r.height;
+            const mx = (e.clientX - r.left) * scaleX;
+            const my = (e.clientY - r.top) * scaleY;
 
+            const meta = canvas.phaseMeta;
             if (!meta) return;
 
             // 1. Check Separators
             for (let i = 0; i < meta.length - 1; i++) {
-                const sepX = meta[i].endX;
-                if (Math.abs(mx - sepX) < 10) {
+                if (Math.abs(mx - meta[i].endX) < 15) {
                     isDragging = true;
                     dragTarget = { type: 'separator', index: i };
                     return;
@@ -564,34 +576,33 @@
             }
 
             // 2. Check Points
-            // Reverse order to pick top element
             for (let i = 0; i < meta.length; i++) {
-                // Dance
-                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_D) < 10) {
-                    isDragging = true;
-                    dragTarget = { type: 'point', index: i, prop: 'dance' };
-                    return;
+                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_E) < 15) {
+                    isDragging = true; dragTarget = { type: 'point', index: i, prop: 'energy' }; return;
                 }
-                // Energy
-                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_E) < 10) {
-                    isDragging = true;
-                    dragTarget = { type: 'point', index: i, prop: 'energy' };
-                    return;
+                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_D) < 15) {
+                    isDragging = true; dragTarget = { type: 'point', index: i, prop: 'dance' }; return;
+                }
+                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_V) < 15) {
+                    isDragging = true; dragTarget = { type: 'point', index: i, prop: 'valence' }; return;
+                }
+                if (Math.hypot(mx - meta[i].centerX, my - meta[i].centerY_T) < 15) {
+                    isDragging = true; dragTarget = { type: 'point', index: i, prop: 'tempo' }; return;
                 }
             }
         });
 
         canvas.addEventListener('mousemove', e => {
             const r = canvas.getBoundingClientRect();
-            const mx = e.clientX - r.left;
-            const my = e.clientY - r.top;
+            const scaleX = canvas.width / r.width;
+            const scaleY = canvas.height / r.height;
+            const mx = (e.clientX - r.left) * scaleX;
+            const my = (e.clientY - r.top) * scaleY;
 
-            // Cursor hint
             let cursor = 'default';
             if (canvas.phaseMeta) {
-                // Check separators
                 for (let i = 0; i < canvas.phaseMeta.length - 1; i++) {
-                    if (Math.abs(mx - canvas.phaseMeta[i].endX) < 10) cursor = 'col-resize';
+                    if (Math.abs(mx - canvas.phaseMeta[i].endX) < 15) cursor = 'col-resize';
                 }
             }
             canvas.style.cursor = cursor;
@@ -599,7 +610,7 @@
             if (!isDragging || !dragTarget) return;
 
             if (dragTarget.type === 'point') {
-                const h = canvas.height - 30; // padding
+                const h = canvas.height - 40; // padding adjusted
                 let val = 1 - (my / h);
                 val = Math.max(0, Math.min(1, val));
                 phases[dragTarget.index][dragTarget.prop] = val;
@@ -654,7 +665,7 @@
                 const phaseTargetDur = totalDurMs * p.durationPercent;
                 let phaseCurrentDur = 0;
 
-                log(`Allocating Phase ${i + 1}: Target ${(phaseTargetDur / 60000).toFixed(1)}m`);
+                log(`Allocating ${p.name || `Phase ${i + 1}`}: Target ${(phaseTargetDur / 60000).toFixed(1)}m`);
 
                 // Try to fill this duration
                 while (phaseCurrentDur < phaseTargetDur && pool.length > 0) {
@@ -662,13 +673,23 @@
                     let bestIdx = -1;
                     let bestScore = Infinity;
 
-                    // Optimization: Don't scan huge list every time if slow. But 500-1000 items is fine.
                     for (let k = 0; k < pool.length; k++) {
                         const t = pool[k];
-                        const tE = t.Energy || 0.5;
-                        const tD = t.Danceability || 0.5;
+                        const tE = parseFloat(t.Energy) || 0.5;
+                        const tD = parseFloat(t.Danceability) || 0.5;
+                        const tV = parseFloat(t.Valence) || 0.5;
+                        // Tempo Normalization: Assume 60-180 BPM range
+                        const tBPM = parseFloat(t.BPM || t.Tempo) || 120;
+                        const tT = Math.max(0, Math.min(1, (tBPM - 60) / 120));
 
-                        const dist = Math.sqrt((tE - p.energy) ** 2 + (tD - p.dance) ** 2);
+                        // Euclidean Distance (Weighted equal)
+                        const dist = Math.sqrt(
+                            (tE - p.energy) ** 2 +
+                            (tD - p.dance) ** 2 +
+                            (tV - p.valence) ** 2 +
+                            (tT - p.tempo) ** 2
+                        );
+
                         if (dist < bestScore) {
                             bestScore = dist;
                             bestIdx = k;
@@ -679,7 +700,6 @@
                         const track = pool[bestIdx];
                         const tDur = track['Duration (ms)'] || 200000;
 
-                        // Check overload? Maybe allow one track overflow to avoid holes
                         playlist.push(track);
                         pool.splice(bestIdx, 1);
 

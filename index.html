@@ -663,7 +663,31 @@
             log("Initiating Spotify Export (PKCE)...");
 
             // 1. Prompt for Name FIRST (Using Custom Modal)
-            const defaultName = `My Flow - ${new Date().toLocaleDateString()}`;
+            let defaultName = `My Flow`;
+
+            if (playlistTracks && playlistTracks.length > 0) {
+                let sumE = 0, sumD = 0, sumV = 0, sumT = 0;
+                playlistTracks.forEach(t => {
+                    sumE += (t._nEnergy || 0);
+                    sumD += (t._nDance || 0);
+                    sumV += (t._nValence || 0);
+                    sumT += (t._nTempo || 0);
+                });
+                const cnt = playlistTracks.length;
+                const avgE = Math.round((sumE / cnt) * 100);
+                const avgD = Math.round((sumD / cnt) * 100);
+                const avgV = Math.round((sumV / cnt) * 100);
+                const avgT = Math.round((sumT / cnt) * 100);
+
+                const dateStr = new Date().toLocaleString('fr-FR', {
+                    day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                }).replace(':', 'h');
+
+                defaultName = `E${avgE} D${avgD} V${avgV} T${avgT} - ${dateStr}`;
+            } else {
+                defaultName = `My Flow - ${new Date().toLocaleDateString()}`;
+            }
+
             const playlistName = await showInputModal("Export Spotify", "Nom de votre Playlist :", defaultName);
 
             if (!playlistName) {

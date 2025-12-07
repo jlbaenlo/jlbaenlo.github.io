@@ -452,7 +452,13 @@
                 </div>
             </div>
 
-            <div class="table-responsive">
+            <!-- Top Scrollbar -->
+            <div id="topScrollContainer"
+                style="overflow-x: auto; overflow-y: hidden; height: 15px; margin-top: 20px; margin-bottom: 0;">
+                <div id="topScrollContent" style="height: 15px;"></div>
+            </div>
+
+            <div class="table-responsive" id="tableMainContainer">
                 <table id="resultTable">
                     <thead>
                         <tr>
@@ -1781,16 +1787,19 @@
             tbody.innerHTML = '';
 
             // Calculate Start Time
+            // Calculate Start Time
             let currentTime = 0; // ms offset
             const startVal = document.getElementById('startTime').value;
             const [sh, sm] = startVal.split(':').map(Number);
-            const startMs = (sh * 3600 + sm * 60) * 1000;
+
+            // Create a base date for correct local time calculation
+            const baseDate = new Date();
+            baseDate.setHours(sh, sm, 0, 0);
 
             tracks.forEach((t, i) => {
                 // Calculate actual time for this track
-                const trackStartMs = startMs + currentTime;
-                const date = new Date(trackStartMs);
-                const timeStr = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const liveDate = new Date(baseDate.getTime() + currentTime);
+                const timeStr = liveDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
                 // Duration
                 const durMs = parseInt(t['Duration (ms)'] || 0);
@@ -1840,18 +1849,43 @@
                 handleSpotifyExport(tracks);
             };
 
-            // Render the Result Chart
-            renderResultChart(tracks);
+            // Sync Top Scrollbar
+            const tableContainer = document.getElementById('tableMainContainer');
+            const topScrollInfo = document.getElementById('topScrollContainer');
+            const topScrollContent = document.getElementById('topScrollContent');
+            const resultTable = document.getElementById('resultTable');
+
+            // Wait for render to stabilize widths
+            setTimeout(() => {
+                topScrollContent.style.width = resultTable.scrollWidth + 'px';
+            }, 100);
+
+            topScrollInfo.onscroll = function () {
+                tableContainer.scrollLeft = topScrollInfo.scrollLeft;
+            };
+            tableContainer.onscroll = function () {
+                topScrollInfo.scrollLeft = tableContainer.scrollLeft;
+            };
         }
 
         function renderResultChart(tracks) {
             const ctx = document.getElementById('resultChart').getContext('2d');
 
-            // Prepare Data
-            const labels = tracks.map((_, i) => {
-                // Return Time label if possible, else Index
-                // We can approximate time based on cumulative duration
-                return i + 1;
+            // Prepare Time Labels
+            const startVal = document.getElementById('startTime').value;
+            const [sh, sm] = startVal.split(':').map(Number);
+            const baseDate = new Date();
+            baseDate.setHours(sh, sm, 0, 0);
+            let cumulativeMs = 0;
+
+            const labels = tracks.map((t) => {
+                const liveDate = new Date(baseDate.getTime() + cumulativeMs);
+                const timeLabel = liveDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                // Accumulate duration for next track start
+                cumulativeMs += parseInt(t['Duration (ms)'] || 0);
+
+                return timeLabel;
             });
 
             // Extract Metrics (handle raw string or normalized?)

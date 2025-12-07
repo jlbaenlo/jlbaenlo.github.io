@@ -335,6 +335,19 @@
                 style="background-color: #1DB954; color: white; border: none; margin-left: 10px;">🟢 Exporter vers
                 Spotify</button>
 
+            <!-- Result Chart Integration -->
+            <div class="container"
+                style="margin-top: 20px; padding: 15px; background: #fff; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+                <header style="text-align: center; margin-bottom: 10px;">
+                    <h3 style="margin: 0; color: #333;">Architecture Énergétique du Set</h3>
+                    <p style="color: #666; font-size: 0.9em; margin: 0;">Corrélation entre Danceability, Energy, Valence
+                        et Tempo</p>
+                </header>
+                <div style="position: relative; height: 350px; width: 100%;">
+                    <canvas id="resultChart"></canvas>
+                </div>
+            </div>
+
             <div class="table-responsive">
                 <table id="resultTable">
                     <thead>
@@ -887,6 +900,7 @@
         // --- STATS LOGIC ---
         let genreChartInst = null;
         let criteriaChartInst = null;
+        let resultChartInst = null; // New Chart Instance
 
         // Helper for genre aggregation (Ensure this is available)
         function getAggregatedGenre(genreString) {
@@ -1728,6 +1742,168 @@
             spotifyBtn.onclick = function () {
                 handleSpotifyExport(tracks);
             };
+
+            // Render the Result Chart
+            renderResultChart(tracks);
+        }
+
+        function renderResultChart(tracks) {
+            const ctx = document.getElementById('resultChart').getContext('2d');
+
+            // Prepare Data
+            const labels = tracks.map((_, i) => {
+                // Return Time label if possible, else Index
+                // We can approximate time based on cumulative duration
+                return i + 1;
+            });
+
+            // Extract Metrics (handle raw string or normalized?)
+            // The user snippet uses 0-1 range. Our csv might have 0-1 or 0-100.
+            // normalizeTracks() ensures _nEnergy, _nDance, _nValence are 0-1.
+            const energy = tracks.map(t => t._nEnergy);
+            const dance = tracks.map(t => t._nDance);
+            const valence = tracks.map(t => t._nValence);
+
+            // BPM (Display raw BPM)
+            const bpm = tracks.map(t => parseFloat(t.BPM || t.Tempo) || 0);
+
+            if (resultChartInst) {
+                resultChartInst.destroy();
+            }
+
+            resultChartInst = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels, // Track Numbers
+                    datasets: [
+                        // --- Left Axis Metrics (0-1) ---
+                        {
+                            label: 'Energy (Puissance)',
+                            data: energy,
+                            borderColor: '#d62728', // Red
+                            backgroundColor: '#d62728',
+                            yAxisID: 'yMetrics',
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
+                        },
+                        {
+                            label: 'Danceability (Groove)',
+                            data: dance,
+                            borderColor: '#2ca02c', // Green
+                            backgroundColor: '#2ca02c',
+                            yAxisID: 'yMetrics',
+                            borderDash: [5, 5], // Dashed line
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
+                        },
+                        {
+                            label: 'Valence (Émotion)',
+                            data: valence,
+                            borderColor: '#1f77b4', // Blue
+                            backgroundColor: '#1f77b4',
+                            yAxisID: 'yMetrics',
+                            tension: 0.3,
+                            borderWidth: 2,
+                            pointRadius: 2,
+                            pointHoverRadius: 4
+                        },
+                        // --- Right Axis Metric (BPM) ---
+                        {
+                            label: 'Tempo (BPM)',
+                            data: bpm,
+                            borderColor: 'purple',
+                            backgroundColor: 'rgba(128, 0, 128, 0.1)',
+                            yAxisID: 'yBPM',
+                            tension: 0.2,
+                            borderWidth: 3,
+                            pointStyle: 'rectRot', // Distinct shape for BPM
+                            pointRadius: 3,
+                            pointHoverRadius: 5,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    scales: {
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                maxTicksLimit: 20 // Avoid crowding
+                            },
+                            title: {
+                                display: true,
+                                text: 'Séquence des Titres'
+                            }
+                        },
+                        // Left Axis: 0.0 - 1.0
+                        yMetrics: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            min: 0,
+                            max: 1.0,
+                            title: {
+                                display: true,
+                                text: 'Intensité (0.0 - 1.0)',
+                                color: '#666',
+                                font: { weight: 'bold' }
+                            }
+                        },
+                        // Right Axis: BPM
+                        yBPM: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            // Let it auto-scale nicely
+                            grid: {
+                                drawOnChartArea: false
+                            },
+                            title: {
+                                display: true,
+                                text: 'Tempo (BPM)',
+                                color: 'purple',
+                                font: { weight: 'bold' }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: {
+                                usePointStyle: true,
+                                padding: 20
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(255, 255, 255, 0.9)',
+                            titleColor: '#000',
+                            bodyColor: '#333',
+                            borderColor: '#ddd',
+                            borderWidth: 1,
+                            callbacks: {
+                                title: function (context) {
+                                    // Show Track Name in Tooltip if possible
+                                    const idx = context[0].dataIndex;
+                                    const t = tracks[idx];
+                                    return `${idx + 1}. ${t['Track Name'] || 'Track'}`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
         }
 
     </script>

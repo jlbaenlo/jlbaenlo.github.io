@@ -1866,6 +1866,9 @@
             tableContainer.onscroll = function () {
                 topScrollInfo.scrollLeft = tableContainer.scrollLeft;
             };
+
+            // Render Chart
+            renderResultChart(tracks);
         }
 
         function renderResultChart(tracks) {

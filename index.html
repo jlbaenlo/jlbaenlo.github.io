@@ -979,15 +979,12 @@
         const PRESETS = {
             custom: () => [],
             party: (n) => [
-                // Warm-up: Mod-Low Energy, Building Tempo
-                { name: "Warm-up", d: 0.15, e: 0.45, da: 0.55, v: 0.60, t: 0.30 },
-                // Build-up: Increasing Intensity
-                { name: "Build-up", d: 0.20, e: 0.65, da: 0.70, v: 0.70, t: 0.50 },
-                // Peak Time: High Energy, Max Danceability, High Happiness
-                { name: "Peak 1", d: 0.20, e: 0.90, da: 0.90, v: 0.85, t: 0.80 },
-                { name: "Peak 2", d: 0.25, e: 0.85, da: 0.88, v: 0.90, t: 0.75 },
-                // Cool Down: Drop in Tempo & Energy
-                { name: "Cool Down", d: 0.20, e: 0.40, da: 0.50, v: 0.50, t: 0.25 }
+                // Based on User Request (Architecture Énergétique)
+                { name: "Warmup", d: 0.20, e: 0.50, da: 0.70, v: 0.70, t: 0.50 },        // BPM ~115 (Range 90-140)
+                { name: "Build Up", d: 0.20, e: 0.68, da: 0.78, v: 0.65, t: 0.64 },      // BPM ~122
+                { name: "Peak Time", d: 0.20, e: 0.90, da: 0.70, v: 0.70, t: 0.76 },     // BPM ~128
+                { name: "Reset / Groove", d: 0.20, e: 0.70, da: 0.88, v: 0.50, t: 0.30 },// BPM ~105
+                { name: "Closing", d: 0.20, e: 0.80, da: 0.55, v: 0.90, t: 0.70 }        // BPM ~125
             ],
             apero: (n) => [
                 // Lounge/Chill: Consistent Mellow Vibe (Low Energy, High Valence)

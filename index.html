@@ -247,8 +247,23 @@
             <p class="small" style="margin-bottom: 5px;">
                 🖱️ <b>Drag</b> les points pour l'intensité. ↔️ <b>Drag</b> les lignes verticales pour changer la durée.
             </p>
-            <div class="graph-container">
+            <div class="graph-container" style="position: relative;">
                 <canvas id="flowChart"></canvas>
+                <!-- Custom Tooltip -->
+                <div id="graph-tooltip" style="
+                    position: absolute; 
+                    display: none; 
+                    background: rgba(255, 255, 255, 0.95); 
+                    border: 1px solid #ccc; 
+                    padding: 10px; 
+                    border-radius: 6px; 
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.15); 
+                    max-width: 250px; 
+                    font-size: 12px; 
+                    pointer-events: none; 
+                    z-index: 100;
+                    line-height: 1.4;
+                "></div>
             </div>
             <div
                 style="display: flex; justify-content: center; gap: 15px; font-size: 13px; margin-top: 5px; flex-wrap: wrap;">
@@ -1445,8 +1460,126 @@
                 phases[i + 1].durationPercent = combinedPct * (1 - newRatio);
             }
 
+            // --- HOVER INFO LOGIC ---
+            // Check Points first
+            let hoverPoint = null;
+            for (let i = 0; i < canvas.phaseMeta.length; i++) {
+                if (Math.hypot(mx - canvas.phaseMeta[i].centerX, my - canvas.phaseMeta[i].centerY_E) < 10) hoverPoint = { type: 'point', prop: 'energy', name: 'Energy', i: i };
+                else if (Math.hypot(mx - canvas.phaseMeta[i].centerX, my - canvas.phaseMeta[i].centerY_D) < 10) hoverPoint = { type: 'point', prop: 'dance', name: 'Danceability', i: i };
+                else if (Math.hypot(mx - canvas.phaseMeta[i].centerX, my - canvas.phaseMeta[i].centerY_V) < 10) hoverPoint = { type: 'point', prop: 'valence', name: 'Valence', i: i };
+                else if (Math.hypot(mx - canvas.phaseMeta[i].centerX, my - canvas.phaseMeta[i].centerY_T) < 10) hoverPoint = { type: 'point', prop: 'tempo', name: 'Tempo', i: i };
+            }
+
+            // Check Phase Column
+            let hoverPhase = null;
+            if (!hoverPoint) {
+                for (let i = 0; i < canvas.phaseMeta.length; i++) {
+                    const m = canvas.phaseMeta[i];
+                    if (mx >= m.startX && mx <= m.endX) {
+                        hoverPhase = { i: i, name: m.name };
+                        break;
+                    }
+                }
+            }
+
+            const tooltip = document.getElementById('graph-tooltip');
+
+            if (hoverPoint) {
+                // Show Criteria Info
+                tooltip.style.display = 'block';
+                tooltip.style.left = (mx + 15) + 'px';
+                tooltip.style.top = (my + 15) + 'px';
+
+                const critInfo = CRITERIA_INFOS[hoverPoint.prop] || {};
+                const phaseVal = phases[hoverPoint.i][hoverPoint.prop];
+
+                tooltip.innerHTML = `
+                    <strong style="color:${critInfo.color}">${critInfo.label} (${(phaseVal * 100).toFixed(0)}%)</strong><br>
+                    <span style="font-size:11px; color:#555;">${critInfo.desc}</span>
+                `;
+            } else if (hoverPhase) {
+                // Show Phase Info
+                tooltip.style.display = 'block';
+                tooltip.style.left = (mx + 15) + 'px';
+                // Keep it somewhat near the top for phase info
+                tooltip.style.top = Math.min(my, canvas.height - 100) + 'px';
+
+                // Map standard names to descriptions keys
+                // We use simplistic matching since names can be "Peak 1", "Peak 2"
+                let key = "default";
+                const pName = hoverPhase.name.toLowerCase();
+
+                if (pName.includes("warm")) key = "warmup";
+                else if (pName.includes("build")) key = "buildup";
+                else if (pName.includes("peak")) key = "peak";
+                else if (pName.includes("reset") || pName.includes("groove")) key = "reset";
+                else if (pName.includes("cool") || pName.includes("closing")) key = "closing";
+
+                const info = PHASE_INFOS[key] || PHASE_INFOS["default"];
+
+                tooltip.innerHTML = `
+                    <strong>Phase ${hoverPhase.i + 1}: ${hoverPhase.name}</strong><br>
+                    <em style="font-size:11px; color:#666;">${info.concept}</em><br>
+                    <div style="margin-top:5px; border-top:1px solid #eee; padding-top:4px;">
+                        ${info.strategy}
+                    </div>
+                `;
+            } else {
+                tooltip.style.display = 'none';
+            }
+
             draw();
         });
+
+        const CRITERIA_INFOS = {
+            energy: {
+                label: "Energy (Densité)",
+                color: "#d62728",
+                desc: "Intensité perceptuelle & volume. Une énergie > 0.9 constante épuise l'oreille. Gérez les contrastes pour que les drops frappent fort."
+            },
+            dance: {
+                label: "Danceability (Groove)",
+                color: "#2ca02c",
+                desc: "Facilité à danser (Stabilité rythmique). Un morceau peut être rapide (Metal) mais peu dansant. Le Funk/Disco a souvent un score élevé."
+            },
+            valence: {
+                label: "Valence (Émotion)",
+                color: "#1f77b4",
+                desc: "Positivité musicale (0=Triste/Dark, 1=Joyeux/Solaire). Essentiel pour la narration. Varier entre mélancolie 'cool' et euphorie."
+            },
+            tempo: {
+                label: "Tempo (BPM)",
+                color: "purple",
+                desc: "Vitesse (Battements Par Minute). Le métronome cardiaque de la soirée. Dicte l'état d'excitation physiologique."
+            }
+        };
+
+        const PHASE_INFOS = {
+            warmup: {
+                concept: "L'Art de l'Accueil & Teasing",
+                strategy: "BPM lent (105-115). Ambiances Lounge/Nu-Disco. Son clair, pas de basses saturées. Objectif : 'Tapotement de pied' inconscient et socialisation."
+            },
+            buildup: {
+                concept: "Construction de la Tension",
+                strategy: "Le public commence à bouger. House Vocal / Deep (118-124 BPM). On serre la vis rythmique. Basses plus rondes ('Four-on-the-floor')."
+            },
+            peak: {
+                concept: "Euphorie & Libération",
+                strategy: "Intensité Max (126-132 BPM). Gros Drops, 'Bangers'. Attention : gérer des micro-pauses pour éviter l'épuisement. Le public saute plus qu'il ne danse."
+            },
+            reset: {
+                concept: "Réinitialisation Sensorielle",
+                strategy: "Casser la monotonie (4h30). Passage à l'Urban/Latin ou Deep profond. Moins d'aigus agressifs, focus sur un groove 'liquide' et sexy pour les survivants."
+            },
+            closing: {
+                concept: "Connexion Émotionnelle",
+                strategy: "Nostalgie & Singalongs. BPM libre. On joue les Classiques. L'objectif est le souvenir émotionnel positif (Haute Valence) pour finir la nuit."
+            },
+            default: {
+                concept: "Phase de Transition",
+                strategy: "Ajustez l'énergie pour guider le public vers la prochaine étape."
+            }
+        };
 
         canvas.addEventListener('mouseup', () => { isDragging = false; dragTarget = null; });
 
